@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+ 
+# Logs
+logs/
+*.log
+ 
+# Build
+dist/
+build/
+backend/target/
+
+# OS
+.DS_Store
+Thumbs.db
+ 
+# Docker / Oracle DB
+data/oracle/
+docker-compose.override.yml
+ 
+# Sensitive / local config
+.claude/
+.env
+.env.*
+!.env.example
+data/
+backups/
+*.bkp
+*.dmp
+*.pem
+*.key
+ 
+# PHP / IDE
+vendor/
+.idea/
+.vscode/
+*.iml
+ 
+# Frontend / cache
+.cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+ 
+# Backup / temp
+*.bak
+*.swp

@@ -1,0 +1,61 @@
+services:
+
+  # ── Oracle 21c XE ──────────────────────────────────────────────
+  oracle21c:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: "${PROJECT_NAME}-oracle21c-xe"
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:1521:1521"
+    volumes:
+      - ./data/oracle:/opt/oracle/oradata
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "echo exit | sqlplus -L system/${ORACLE_PASSWORD}@localhost:1521/XE || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+
+
+  # ── Spring Boot backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: "${PROJECT_NAME}-backend"
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8081:8080"
+    environment:
+      TZ: Africa/Tunis
+      ORACLE_HOST: oracle21c
+      ORACLE_PORT: 1521
+      ORACLE_DBNAME: ${ORACLE_DBNAME}
+      ORACLE_USER: ${ORACLE_USER}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Set INITIAL_ADMIN_PASSWORD in .env}
+      SQLSERVER_URL: ${SQLSERVER_URL:?Set SQLSERVER_URL in .env}
+      SQLSERVER_USER: ${SQLSERVER_USER:?Set SQLSERVER_USER in .env}
+      SQLSERVER_PASSWORD: ${SQLSERVER_PASSWORD:?Set SQLSERVER_PASSWORD in .env}
+      CORS_ALLOWED_ORIGINS: "http://${SERVER_HOST}:3001"
+    depends_on:
+      oracle21c:
+        condition: service_healthy
+   
+
+  # ── React frontend (Nginx) ────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=http://${SERVER_HOST}:8081
+        - REACT_APP_API_URL=http://${SERVER_HOST}:8081
+    container_name: "${PROJECT_NAME}-frontend"
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:3001:80"
+    depends_on:
+    
+      - backend

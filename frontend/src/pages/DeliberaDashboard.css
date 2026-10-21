@@ -1,0 +1,361 @@
+.delibera-tv {
+  min-height: calc(100vh - 148px);
+  padding: clamp(18px, 2vw, 30px);
+  color: #14253b;
+  background: #f4f7fb;
+}
+
+.delibera-tv:fullscreen {
+  min-height: 100vh;
+  overflow: auto;
+  padding: 24px;
+}
+
+.delibera-tv__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+}
+
+.delibera-tv__eyebrow {
+  margin: 0 0 5px;
+  color: #486da8;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+
+.delibera-tv__header h1 {
+  margin: 0;
+  font-size: clamp(23px, 2.4vw, 34px);
+  line-height: 1.1;
+}
+
+.delibera-tv__updated {
+  margin: 6px 0 0;
+  color: #65758b;
+  font-size: 13px;
+}
+
+.delibera-tv__toolbar,
+.delibera-tv__target-form label {
+  display: flex;
+  align-items: end;
+  gap: 9px;
+}
+
+.delibera-tv__toolbar label,
+.delibera-tv__target-form label {
+  display: grid;
+  gap: 5px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.delibera-tv__toolbar input,
+.delibera-tv__target-form input,
+.delibera-tv__target-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  color: #172a43;
+  background: white;
+  font: inherit;
+}
+
+.delibera-tv__button {
+  min-height: 42px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  background: #315f9e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.delibera-tv__button:hover {
+  background: #244c82;
+}
+
+.delibera-tv__button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.delibera-tv__button--secondary {
+  border: 1px solid #cbd5e1;
+  color: #293b53;
+  background: white;
+}
+
+.delibera-tv__button--secondary:hover {
+  background: #f0f3f8;
+}
+
+.delibera-tv__error {
+  padding: 11px 14px;
+  margin-bottom: 14px;
+  border: 1px solid #f2b8b5;
+  border-radius: 8px;
+  color: #8f211d;
+  background: #fff1f0;
+  font-weight: 650;
+}
+
+.delibera-tv__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 320px);
+  align-items: start;
+  gap: 14px;
+}
+
+.delibera-tv__table-wrap {
+  overflow: auto;
+  border: 1px solid #dce4ee;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 5px 16px rgb(22 38 58 / 8%);
+}
+
+.delibera-tv__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.delibera-tv__table th,
+.delibera-tv__table td {
+  padding: clamp(14px, 1.35vw, 20px) clamp(12px, 1.5vw, 22px);
+  border-bottom: 1px solid #e8edf3;
+}
+
+.delibera-tv__table th {
+  color: #334a66;
+  background: #eaf0f7;
+  font-size: clamp(11px, .95vw, 13px);
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.delibera-tv__table th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.delibera-tv__table th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.delibera-tv__table td {
+  color: #182940;
+  font-size: clamp(15px, 1.5vw, 21px);
+  font-weight: 650;
+}
+
+.delibera-tv__table tbody tr:nth-child(even) {
+  background: #f8fafd;
+}
+
+.delibera-tv__table tbody tr:hover {
+  background: #eef4fb;
+}
+
+.delibera-tv__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.delibera-tv__number {
+  min-width: 70px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.delibera-tv__hour {
+  color: #101d2e !important;
+  font-weight: 800 !important;
+  white-space: nowrap;
+}
+
+.delibera-tv__ok {
+  color: #16763d !important;
+}
+
+.delibera-tv__nok {
+  color: #c2212b !important;
+}
+
+.delibera-tv__target {
+  color: #657991 !important;
+  font-weight: 750 !important;
+}
+
+.delibera-tv__empty {
+  padding: 35px 16px !important;
+  color: #64748b !important;
+  text-align: center;
+  font-size: 15px !important;
+}
+
+.delibera-tv__summary {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #dce4ee;
+  border-radius: 12px;
+  background: #edf2f8;
+}
+
+.delibera-tv__summary-heading {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 4px 0 2px;
+  text-align: center;
+}
+
+.delibera-tv__summary-heading span {
+  color: #718096;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .12em;
+}
+
+.delibera-tv__summary-heading strong {
+  color: #14253b;
+  font-size: 24px;
+}
+
+.delibera-tv__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.delibera-tv__metric {
+  display: grid;
+  min-height: 94px;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: white;
+  box-shadow: 0 4px 12px rgb(22 38 58 / 10%);
+}
+
+.delibera-tv__metric span {
+  color: #718096;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.delibera-tv__metric strong {
+  color: #1c3451;
+  font-size: clamp(26px, 2.2vw, 34px);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.delibera-tv__metric--target {
+  grid-column: 1 / -1;
+  border-color: #d4e1f3;
+  background: #e3edf9;
+}
+
+.delibera-tv__metric--ok strong {
+  color: #16824b;
+}
+
+.delibera-tv__metric--nok strong {
+  color: #c2212b;
+}
+
+.delibera-tv__target-form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dce4ee;
+  border-radius: 11px;
+  background: white;
+  box-shadow: 0 4px 12px rgb(22 38 58 / 8%);
+}
+
+.delibera-tv__target-form > strong {
+  color: #31445d;
+  font-size: 15px;
+}
+
+.delibera-tv__form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.delibera-tv__target-form .delibera-tv__button {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .delibera-tv__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .delibera-tv__toolbar {
+    width: 100%;
+  }
+
+  .delibera-tv__toolbar label {
+    flex: 1;
+  }
+
+  .delibera-tv__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .delibera-tv__summary {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+    align-items: start;
+  }
+
+  .delibera-tv__summary-heading {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .delibera-tv__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .delibera-tv__toolbar {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .delibera-tv__toolbar label {
+    flex-basis: 100%;
+  }
+
+  .delibera-tv__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .delibera-tv__summary-heading {
+    grid-column: auto;
+  }
+}

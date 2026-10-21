@@ -1,0 +1,676 @@
+.delibera-scan-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 18px 24px 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.delibera-scan-tab {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 22px;
+  margin-bottom: -1px;
+  border: 1px solid #dbe3ed;
+  border-bottom-color: #dbe3ed;
+  border-radius: 11px 11px 0 0;
+  color: #516277;
+  background: #eef2f7;
+  font: 750 14px Inter, -apple-system, sans-serif;
+  cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s, box-shadow .15s;
+}
+
+.delibera-scan-tab > span {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border-radius: 7px;
+  color: currentColor;
+  background: rgb(255 255 255 / 72%);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.delibera-scan-tab:hover {
+  color: #243850;
+  background: #fff;
+}
+
+.delibera-scan-tab.active {
+  position: relative;
+  border-color: #dbe3ed;
+  border-bottom-color: #fff;
+  color: #176943;
+  background: #fff;
+  box-shadow: 0 -2px 8px rgb(25 50 80 / 4%);
+}
+
+.delibera-scan-tab--nok.active {
+  color: #b4232d;
+}
+
+.delibera-scan-tab--history.active {
+  color: #3b5f91;
+}
+
+.delibera-fast-scan {
+  display: grid;
+  grid-template-columns: minmax(260px, .75fr) minmax(320px, 1.25fr);
+  align-items: center;
+  gap: 28px;
+  min-height: 230px;
+  padding: 34px clamp(22px, 5vw, 72px);
+  background: white;
+  border-bottom: 1px solid #e3eaf2;
+}
+
+.delibera-fast-scan--ok {
+  --scan-accent: #16834b;
+  --scan-soft: #f0fdf4;
+  --scan-border: #a8dfbb;
+}
+
+.delibera-fast-scan--nok {
+  --scan-accent: #bd2934;
+  --scan-soft: #fff4f4;
+  --scan-border: #efb9bd;
+}
+
+.delibera-fast-scan__heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.delibera-fast-scan__icon {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  place-items: center;
+  border-radius: 17px;
+  color: white;
+  background: var(--scan-accent);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--scan-accent) 22%, transparent);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.delibera-fast-scan__heading h3 {
+  margin: 0;
+  color: #182b42;
+  font-size: clamp(22px, 2vw, 30px);
+  font-weight: 850;
+}
+
+.delibera-fast-scan__heading p {
+  max-width: 470px;
+  margin: 7px 0 0;
+  color: #62748a;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.delibera-fast-scan__input-wrap {
+  position: relative;
+}
+
+.delibera-fast-scan__input-wrap input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  padding: 17px 180px 17px 22px;
+  border: 2px solid var(--scan-border);
+  border-radius: 14px;
+  outline: none;
+  color: #173047;
+  background: var(--scan-soft);
+  box-shadow: 0 4px 14px rgb(26 47 67 / 6%);
+  font: 800 clamp(18px, 1.7vw, 24px) Inter, -apple-system, sans-serif;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+
+.delibera-fast-scan__input-wrap input:focus {
+  border-color: var(--scan-accent);
+  background: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--scan-accent) 13%, transparent);
+}
+
+.delibera-fast-scan__input-wrap input::placeholder {
+  color: #8190a2;
+  font-size: clamp(15px, 1.35vw, 19px);
+  font-weight: 500;
+}
+
+.delibera-fast-scan__status {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  color: var(--scan-accent);
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.delibera-fast-scan__readonly {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border-radius: 10px;
+  color: #72510b;
+  background: #fff8e6;
+  font-weight: 650;
+}
+
+.delibera-scan-records {
+  padding: 18px 24px 24px;
+  background: #fff;
+}
+
+.delibera-scan-records--ok {
+  --records-accent: #16834b;
+}
+
+.delibera-scan-records--nok {
+  --records-accent: #bd2934;
+}
+
+.delibera-scan-records__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.delibera-scan-records__heading h4 {
+  margin: 0;
+  color: #26394f;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.delibera-scan-records__heading > span {
+  color: #718096;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.delibera-scan-records__scroll {
+  overflow: auto;
+  max-height: 360px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.delibera-scan-records table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.delibera-scan-records th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  color: #52657b;
+  background: #f7f9fc;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.delibera-scan-records td {
+  padding: 10px 12px;
+  border-top: 1px solid #edf1f5;
+  color: #44566c;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.delibera-scan-records td:first-child {
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.delibera-scan-records td code {
+  color: #25364a;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.delibera-scan-records__badge,
+.delibera-scan-records__defects span {
+  display: inline-flex;
+  margin: 1px 3px 1px 0;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.delibera-scan-records__badge--ok {
+  color: #167244;
+  background: #eaf8ef;
+  border: 1px solid #b8e4c7;
+}
+
+.delibera-scan-records__defects span {
+  color: #a52834;
+  background: #fff0f1;
+  border: 1px solid #f2c4c8;
+}
+
+.delibera-scan-records__message {
+  padding: 24px 14px;
+  border: 1px dashed #dbe3ed;
+  border-radius: 10px;
+  color: #728196;
+  background: #fafbfd;
+  font-size: 13px;
+  text-align: center;
+}
+
+.delibera-scan-records__message--error {
+  color: #a52834;
+  border-color: #f2c4c8;
+  background: #fff7f7;
+}
+
+@media (max-width: 760px) {
+  .delibera-scan-tabs {
+    gap: 6px;
+    padding: 12px 12px 0;
+  }
+
+  .delibera-scan-tab {
+    min-height: 44px;
+    flex: 1;
+    gap: 5px;
+    padding: 9px 6px;
+    font-size: 12px;
+  }
+
+  .delibera-scan-tab > span {
+    width: 20px;
+    height: 20px;
+    font-size: 15px;
+  }
+
+  .delibera-fast-scan {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+    min-height: 0;
+    padding: 28px 18px;
+  }
+
+  .delibera-fast-scan__input-wrap input {
+    min-height: 62px;
+    padding: 14px 16px;
+  }
+
+  .delibera-fast-scan__status {
+    display: none;
+  }
+
+  .delibera-scan-records {
+    padding: 16px 12px 20px;
+  }
+}
+
+.delibera-nok-defect-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(15 23 42 / 62%);
+}
+
+.delibera-nok-defect-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 720px);
+  max-height: min(88vh, 820px);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 72px rgb(15 23 42 / 28%);
+}
+
+.delibera-nok-defect-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.delibera-nok-defect-modal__eyebrow {
+  color: #b4232d;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .9px;
+  text-transform: uppercase;
+}
+
+.delibera-nok-defect-modal__header h3 {
+  margin: 4px 0;
+  color: #182b42;
+  font-size: 22px;
+  font-weight: 850;
+}
+
+.delibera-nok-defect-modal__header p {
+  margin: 0;
+  color: #62748a;
+  font-size: 13px;
+}
+
+.delibera-nok-defect-modal__header p strong {
+  color: #26394f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.delibera-nok-defect-modal__header > button {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 0;
+  border-radius: 9px;
+  color: #52657b;
+  background: #f1f5f9;
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.delibera-nok-defect-modal__header > button:hover,
+.delibera-nok-defect-modal__footer button:hover {
+  background: #e2e8f0;
+}
+
+.delibera-nok-defect-modal__scan {
+  padding: 18px 24px 14px;
+  background: #fff8f8;
+  border-bottom: 1px solid #f4e0e2;
+}
+
+.delibera-nok-defect-modal__scan label {
+  display: block;
+  margin-bottom: 7px;
+  color: #7f2630;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.delibera-nok-defect-modal__scan > div {
+  display: flex;
+  gap: 8px;
+}
+
+.delibera-nok-defect-modal__scan input,
+.delibera-nok-defect-modal__search {
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 9px;
+  outline: none;
+  color: #26394f;
+  background: #fff;
+  font: 500 13px Inter, -apple-system, sans-serif;
+}
+
+.delibera-nok-defect-modal__scan input {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.delibera-nok-defect-modal__scan input:focus,
+.delibera-nok-defect-modal__search:focus {
+  border-color: #b4232d;
+  box-shadow: 0 0 0 3px rgb(180 35 45 / 10%);
+}
+
+.delibera-nok-defect-modal__scan button {
+  min-width: 96px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: #b4232d;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.delibera-nok-defect-modal__scan button:disabled,
+.delibera-nok-defect-option:disabled,
+.delibera-nok-defect-modal__footer button:disabled {
+  cursor: wait;
+  opacity: .65;
+}
+
+.delibera-nok-defect-modal__list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 24px 8px;
+}
+
+.delibera-nok-defect-modal__list-heading h4 {
+  margin: 0;
+  color: #26394f;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.delibera-nok-defect-modal__list-heading span {
+  color: #718096;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.delibera-nok-defect-modal__search {
+  margin: 0 24px 10px;
+  width: calc(100% - 48px);
+  min-height: 40px;
+  padding: 9px 12px;
+}
+
+.delibera-nok-defect-modal__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 110px;
+  overflow-y: auto;
+  padding: 0 24px 16px;
+}
+
+.delibera-nok-defect-option {
+  display: grid;
+  grid-template-columns: minmax(54px, auto) minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 9px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  color: #44566c;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, box-shadow .15s;
+}
+
+.delibera-nok-defect-option:hover:not(:disabled) {
+  border-color: #e3a6ab;
+  background: #fff7f7;
+  box-shadow: 0 2px 8px rgb(180 35 45 / 8%);
+}
+
+.delibera-nok-defect-option code {
+  color: #a52834;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.delibera-nok-defect-option span {
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.delibera-nok-defect-option strong {
+  color: #a52834;
+  font-size: 19px;
+  text-align: right;
+}
+
+.delibera-nok-defect-modal__empty {
+  grid-column: 1 / -1;
+  align-self: center;
+  margin: 0;
+  padding: 24px 10px;
+  color: #718096;
+  font-size: 13px;
+  text-align: center;
+}
+
+.delibera-nok-defect-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid #edf1f5;
+  background: #fafbfd;
+}
+
+.delibera-nok-defect-modal__footer span {
+  color: #718096;
+  font-size: 11px;
+}
+
+.delibera-nok-defect-modal__footer button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #475569;
+  background: #e9eef4;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .delibera-nok-defect-overlay {
+    align-items: flex-end;
+    padding: 8px;
+  }
+
+  .delibera-nok-defect-modal {
+    max-height: 92vh;
+    border-radius: 16px;
+  }
+
+  .delibera-nok-defect-modal__header,
+  .delibera-nok-defect-modal__scan {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .delibera-nok-defect-modal__list-heading {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .delibera-nok-defect-modal__search {
+    width: calc(100% - 32px);
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .delibera-nok-defect-modal__list {
+    grid-template-columns: 1fr;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .delibera-nok-defect-modal__footer {
+    align-items: flex-start;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}
+.delibera-setup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(10, 14, 30, .72);
+}
+
+.delibera-setup {
+  width: 100%;
+  max-width: 580px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+}
+
+.delibera-setup header,
+.delibera-setup footer,
+.delibera-scan-type {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.delibera-setup header {
+  background: #5b21b6;
+  color: #fff;
+}
+
+.delibera-setup header span { font-size: 11px; letter-spacing: .08em; }
+.delibera-setup h3 { margin: 8px 0; font-size: 20px; }
+.delibera-setup p, .delibera-scan-type p { margin: 6px 0 0; }
+.delibera-setup__fields { display: grid; gap: 10px; padding: 24px; }
+.delibera-setup__fields label { margin-top: 8px; font-size: 14px; font-weight: 700; }
+.delibera-setup select { width: 100%; min-height: 46px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+.delibera-setup button, .delibera-scan-type button { min-height: 42px; padding: 10px 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; cursor: pointer; font-weight: 700; }
+.delibera-setup footer { border-top: 1px solid #e2e8f0; justify-content: flex-end; flex-wrap: wrap; }
+.delibera-setup button[type="submit"] { background: #6d28d9; color: #fff; border-color: #6d28d9; }
+.delibera-setup button:disabled { opacity: .5; cursor: not-allowed; }
+.delibera-setup select:focus-visible, .delibera-setup button:focus-visible { outline: 3px solid #a78bfa; outline-offset: 2px; }
+.delibera-setup__recap { padding: 12px; border-radius: 8px; background: #f5f3ff; color: #5b21b6; overflow-wrap: anywhere; }
+.delibera-scan-type { margin: 16px 24px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf5ff; color: #5b21b6; flex-wrap: wrap; }
+.delibera-scan-type button:disabled { opacity: .5; cursor: not-allowed; }
+.delibera-setup textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 100px; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+.delibera-setup fieldset { min-width: 0; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.delibera-setup .delibera-return-defect { display: flex; gap: 10px; align-items: center; padding: 10px 0; font-size: 14px; font-weight: 400; }
+.delibera-return-defect input { width: 20px; height: 20px; flex-shrink: 0; }
