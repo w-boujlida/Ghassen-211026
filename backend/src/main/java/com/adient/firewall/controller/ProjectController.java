@@ -23,6 +23,16 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("projects", svc.getProjects())));
     }
 
+    @GetMapping("/metadata/messages")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAllRefMessages() {
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("messages", svc.getAllRefVerifMessages())));
+    }
+
+    @GetMapping("/metadata/checkpoints")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getAllRefCheckpoints() {
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("checkpoints", svc.getAllRefCheckpoints())));
+    }
+
     /** All authenticated users can view project refs. */
     @GetMapping("/{name}/refs")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getRefs(

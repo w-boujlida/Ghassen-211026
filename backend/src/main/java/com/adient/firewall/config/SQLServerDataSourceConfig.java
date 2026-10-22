@@ -4,6 +4,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,8 +21,10 @@ import java.util.Properties;
  * Read-only JPA setup for the external SQL Server ERP (SAGE) database.
  * Kept fully separate from Oracle: no @Primary bean here, entities/repositories
  * live under entity.sqlserver / repository.sqlserver only.
+ * Disabled entirely when spring.datasource.sqlserver.url is blank (local dev without ERP).
  */
 @Configuration
+@ConditionalOnExpression("!'${spring.datasource.sqlserver.url:}'.isBlank()")
 @EnableConfigurationProperties(SQLServerDataSourceProperties.class)
 @EnableJpaRepositories(
         basePackages = "com.adient.firewall.repository.sqlserver",

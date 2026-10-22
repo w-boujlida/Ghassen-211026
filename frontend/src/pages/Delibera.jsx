@@ -786,6 +786,72 @@ function VerifyModal({ record, defCodes, onClose, onDone }) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Page principale Délibéra ──────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
+function CheckpointReviewModal({ review, saving, onCancel, onConfirm }) {
+  const [results, setResults] = useState(() => Object.fromEntries(
+    review.checkpoints.map(checkpoint => {
+      const existing = review.record?.checkpointResults?.find(item =>
+        (item.CHECKPOINT || item.checkpoint) === checkpoint
+      )
+      return [checkpoint, existing?.STATUS || existing?.status || '']
+    })
+  ))
+  const piece = review.piece
+  const fieldStyle = { fontSize: 11, color: '#64748b' }
+  const confirm = () => onConfirm(review.checkpoints.map(checkpoint => ({
+    checkpoint,
+    status: results[checkpoint],
+  })))
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1200, background:'rgba(10,14,30,0.65)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div style={{ width:'min(620px, 100%)', maxHeight:'90vh', overflowY:'auto', background:'#fff', borderRadius:14, boxShadow:'0 24px 70px rgba(0,0,0,.3)' }}>
+        <div style={{ background:'#4f46e5', color:'#fff', padding:'18px 22px', borderRadius:'14px 14px 0 0' }}>
+          <div style={{ fontSize:10, fontWeight:800, letterSpacing:'.08em', opacity:.8 }}>CONTRÔLE DES CHECKPOINTS</div>
+          <h3 style={{ margin:'7px 0 0', fontSize:18 }}>Résultat de chaque point de vérification</h3>
+        </div>
+        <div style={{ padding:20, display:'grid', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:'8px 16px', padding:12, background:'#f8fafc', borderRadius:8 }}>
+            <div><span style={fieldStyle}>Projet</span><div>{piece.projet || '—'}</div></div>
+            <div><span style={fieldStyle}>Ligne</span><div>{piece.ligne || '—'}</div></div>
+            <div><span style={fieldStyle}>Version</span><div>{piece.version || '—'}</div></div>
+            <div><span style={fieldStyle}>PDEF</span><div>{piece.pdef || '—'}</div></div>
+            <div><span style={fieldStyle}>FAS / code-barres</span><div>{piece.barcodeRaw || piece.barcode || '—'}</div></div>
+            <div><span style={fieldStyle}>Désignation</span><div>{piece.designation || '—'}</div></div>
+            <div><span style={fieldStyle}>REF_DETAIL</span><div>{piece.reference || '—'}</div></div>
+          </div>
+          <div style={{ display:'grid', gap:10 }}>
+            {review.checkpoints.map(checkpoint => (
+              <div key={checkpoint} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'10px 12px', border:'1px solid #e2e8f0', borderRadius:8 }}>
+                <strong style={{ fontSize:13, color:'#334155' }}>{checkpoint}</strong>
+                <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                  {['OK', 'NOK'].map(status => {
+                    const selected = results[checkpoint] === status
+                    const color = status === 'OK' ? '#15803d' : '#dc2626'
+                    return (
+                      <button key={status} type="button" disabled={saving}
+                        onClick={() => setResults(current => ({ ...current, [checkpoint]: status }))}
+                        style={{ minWidth:64, padding:'7px 12px', border:`1px solid ${selected ? color : '#cbd5e1'}`, borderRadius:7, background:selected ? color : '#fff', color:selected ? '#fff' : '#475569', fontWeight:700, cursor:'pointer' }}>
+                        {status}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:10, padding:'14px 20px', borderTop:'1px solid #e2e8f0' }}>
+          <button type="button" onClick={onCancel} disabled={saving} className="btn btn-secondary">Annuler</button>
+          <button type="button" onClick={confirm} disabled={saving || review.checkpoints.some(checkpoint => !results[checkpoint])}
+            className="btn btn-primary">
+            {saving ? 'Enregistrement…' : 'Valider les checkpoints'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Delibera() {
   const { can } = useAuth()
   const { t } = useLang()
@@ -815,6 +881,9 @@ export default function Delibera() {
   const nokDefectBarcodeRef = useRef(null)
   const [pendingNokPiece, setPendingNokPiece] = useState(null)
   const pendingNokPieceRef = useRef(null)
+  const [pendingNokCheckpointResults, setPendingNokCheckpointResults] = useState([])
+  const [checkpointReview, setCheckpointReview] = useState(null)
+  const [checkpointReviewSaving, setCheckpointReviewSaving] = useState(false)
   const [defCodesLoading, setDefCodesLoading] = useState(true)
   const nokScanningRef = useRef(false)
   const [okBarcode, setOkBarcode] = useState('')
@@ -975,6 +1044,70 @@ export default function Delibera() {
     if (!matches) throw new Error(`Pièce refusée : le type ne correspond pas à ${scanType.projet} / ${scanType.ligne || 'Sans ligne'} / ${scanType.version || 'Sans version'}.`)
   }
 
+  const openCheckpointReview = async (piece, mode, record = null) => {
+    if (!piece?.projet || !piece?.pdef) return false
+    const data = await projectsApi.getRefCheckpoints(piece.projet, piece.pdef)
+    const checkpoints = data?.checkpoints || []
+    if (checkpoints.length === 0) return false
+    setCheckpointReview({ piece, mode, record, checkpoints })
+    return true
+  }
+
+  const submitCheckpointReview = async checkpointResults => {
+    if (!checkpointReview || checkpointReviewSaving) return
+    const { piece, mode, record } = checkpointReview
+    const savedResults = checkpointResults.map(result => ({
+      ...result,
+      project: piece.projet || '',
+      ligne: piece.ligne || '',
+      pdef: piece.pdef || '',
+      fas: piece.barcodeRaw || piece.barcode || '',
+      designation: piece.designation || '',
+      version: piece.version || '',
+      refDetail: piece.reference || '',
+    }))
+    setCheckpointReviewSaving(true)
+    try {
+      if (mode === 'ok-new') {
+        await deliberaApi.createRecord({
+          barcode: piece.barcodeRaw,
+          projet: piece.projet || null,
+          reference: piece.reference || null,
+          version: piece.version || null,
+          ligne: piece.ligne || null,
+          statutReprise: 'RETURNED',
+          defauts: [],
+          checkpointResults: savedResults,
+        })
+        setCheckpointReview(null)
+        showToast('Pièce OK enregistrée avec les checkpoints ✓')
+        loadRecords()
+        loadKpis()
+        loadScanRecords()
+        window.setTimeout(() => okBarcodeRef.current?.focus(), 100)
+      } else if (mode === 'nok-new') {
+        pendingNokPieceRef.current = piece
+        setPendingNokPiece(piece)
+        setPendingNokCheckpointResults(savedResults)
+        setCheckpointReview(null)
+        showToast('Points de vérification enregistrés. Sélectionnez maintenant le défaut NOK.', 'warning')
+        window.setTimeout(() => nokDefectBarcodeRef.current?.focus(), 100)
+      } else {
+        const recordId = record.ID ?? record.id
+        await deliberaApi.setRecordCheckpoints(recordId, savedResults)
+        const updatedRecord = { ...record, checkpointResults: savedResults }
+        setCheckpointReview(null)
+        if (mode === 'ok-existing') setReturnRecord(updatedRecord)
+        else setVerifyRecord(updatedRecord)
+        window.setTimeout(() => (mode === 'ok-existing' ? okBarcodeRef : barcodeRef).current?.focus(), 100)
+      }
+    } catch (error) {
+      showToast(error?.response?.data?.error || error.message || 'Erreur lors de l’enregistrement des checkpoints', 'error')
+    } finally {
+      setCheckpointReviewSaving(false)
+    }
+  }
+
   const submitNokDefect = async defect => {
     const piece = pendingNokPieceRef.current
     if (!piece || !defect || nokScanningRef.current) return
@@ -990,9 +1123,11 @@ export default function Delibera() {
         ligne: piece.ligne || null,
         statutReprise: 'NOT_RETURNED',
         defauts: [{ codeDefaut: defect.cod, descDefaut: defect.description || '' }],
+        checkpointResults: pendingNokCheckpointResults,
       })
       pendingNokPieceRef.current = null
       setPendingNokPiece(null)
+      setPendingNokCheckpointResults([])
       showToast(`Pièce NOK enregistrée — défaut ${defect.cod} ✓`)
       loadRecords()
       loadKpis()
@@ -1042,7 +1177,9 @@ export default function Delibera() {
             showToast('Pièce déjà retournée – modification interdite', 'warning')
             return
           }
-          setVerifyRecord(d)
+          const piece = { ...data, barcodeRaw: scannedValue }
+          const hasCheckpoints = await openCheckpointReview(piece, 'nok-existing', d)
+          if (!hasCheckpoints) setVerifyRecord(d)
           showToast('Cette coiffe est déjà enregistrée NOK. Vérifiez les défauts existants.', 'warning')
         } else {
           showToast('Enregistrement introuvable (ID manquant)', 'warning')
@@ -1052,6 +1189,7 @@ export default function Delibera() {
 
       if (data.found) {
         const piece = { ...data, barcodeRaw: scannedValue }
+        if (await openCheckpointReview(piece, 'nok-new')) return
         pendingNokPieceRef.current = piece
         setPendingNokPiece(piece)
         showToast('Pièce reconnue. Sélectionnez un défaut ou scannez son étiquette.', 'warning')
@@ -1099,10 +1237,14 @@ export default function Delibera() {
         }
         checkScanType({ projet: record.PROJET ?? record.projet, ligne: record.LIGNE ?? record.ligne,
           version: record.VERSION ?? record.version })
-        setReturnRecord(record)
+        const piece = { ...data, barcodeRaw: scannedBarcode }
+        const hasCheckpoints = await openCheckpointReview(piece, 'ok-existing', record)
+        if (!hasCheckpoints) setReturnRecord(record)
         return
       }
 
+      const piece = { ...data, barcodeRaw: scannedBarcode }
+      if (await openCheckpointReview(piece, 'ok-new')) return
       await deliberaApi.createRecord({
         barcode: scannedBarcode,
         projet: data.projet || null,
@@ -1962,6 +2104,18 @@ export default function Delibera() {
         />
       )}
 
+      {checkpointReview && (
+        <CheckpointReviewModal
+          review={checkpointReview}
+          saving={checkpointReviewSaving}
+          onCancel={() => {
+            setCheckpointReview(null)
+            setTimeout(() => (scanPage === 'coiffe-ok' ? okBarcodeRef : barcodeRef).current?.focus(), 100)
+          }}
+          onConfirm={submitCheckpointReview}
+        />
+      )}
+
       {pendingNokPiece && (
         <NokDefectModal
           piece={pendingNokPiece}
@@ -1974,6 +2128,7 @@ export default function Delibera() {
           onCancel={() => {
             pendingNokPieceRef.current = null
             setPendingNokPiece(null)
+            setPendingNokCheckpointResults([])
             setBarcode('')
             setTimeout(() => barcodeRef.current?.focus(), 100)
           }}

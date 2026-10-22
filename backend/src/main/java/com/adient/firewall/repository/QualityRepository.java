@@ -1138,6 +1138,32 @@ public class QualityRepository {
                 mat, code);
     }
 
+    public void synchronizeEmployeeTampon(String code, String mat) {
+        Optional<Map<String, Object>> tampon = findTamponByCode(code);
+        Integer otherOwners = db.queryForObject(
+                "SELECT COUNT(*) FROM SYSTEM.POLY WHERE UPPER(TAMPON)=UPPER(?) AND MAT<>?",
+                Integer.class, code, mat);
+        if (otherOwners != null && otherOwners > 0) {
+            throw new IllegalArgumentException("Le tampon " + code + " est déjà attribué à un autre employé");
+        }
+        if (tampon.isEmpty()) {
+            insertTampon(code, "");
+        }
+        int assigned = db.update(
+                "UPDATE SYSTEM.TAMPONS SET MAT=? WHERE UPPER(CODE)=UPPER(?) AND (MAT IS NULL OR MAT=?)",
+                mat, code, mat);
+        if (assigned == 0) {
+            throw new IllegalArgumentException("Le tampon " + code + " est déjà attribué à un autre employé");
+        }
+        db.update("UPDATE SYSTEM.TAMPONS SET MAT=NULL WHERE MAT=? AND UPPER(CODE)<>UPPER(?)", mat, code);
+    }
+
+    public void releaseEmployeeTampons(String mat) {
+        if (tamponsTableExists()) {
+            db.update("UPDATE SYSTEM.TAMPONS SET MAT=NULL WHERE MAT=?", mat);
+        }
+    }
+
     public void updateTampon(Long id, String code, String description) {
         db.update("UPDATE SYSTEM.TAMPONS SET CODE=UPPER(?),DESCRIPTION=? WHERE ID=?", code, description, id);
     }
@@ -1610,6 +1636,12 @@ public class QualityRepository {
         }
     }
 
+    public List<Map<String, Object>> getAllRefVerifMessages() {
+        return db.queryForList(
+            "SELECT ID,PROJECT_NAME,PDEF,MESSAGE,DISPLAY_ORDER FROM SYSTEM.REF_VERIF_MESSAGES " +
+                "WHERE MESSAGE IS NOT NULL ORDER BY PROJECT_NAME,PDEF,DISPLAY_ORDER,ID");
+    }
+
     public void setRefVerifMessages(String project, String pdef, List<String> messages) {
         String pn = project.toUpperCase();
         db.update("DELETE FROM SYSTEM.REF_VERIF_MESSAGES WHERE PROJECT_NAME=? AND PDEF=?", pn, pdef);
@@ -1709,6 +1741,12 @@ public class QualityRepository {
             log.warn("getRefCheckpoints failed: {}", e.getMessage());
             return Collections.emptyList();
         }
+    }
+
+    public List<Map<String, Object>> getAllRefCheckpoints() {
+        return db.queryForList(
+            "SELECT ID,PROJECT_NAME,PDEF,CHECKPOINT,DISPLAY_ORDER FROM SYSTEM.REF_CHECKPOINTS " +
+                "WHERE CHECKPOINT IS NOT NULL ORDER BY PROJECT_NAME,PDEF,DISPLAY_ORDER,ID");
     }
 
     public void setRefCheckpoints(String project, String pdef, List<String> checkpoints) {

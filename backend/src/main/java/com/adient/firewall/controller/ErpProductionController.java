@@ -5,6 +5,7 @@ import com.adient.firewall.dto.ProductionHoraireDTO;
 import com.adient.firewall.dto.ProductionTempsReelDTO;
 import com.adient.firewall.service.ErpProductionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/erp")
+@ConditionalOnExpression("!'${spring.datasource.sqlserver.url:}'.isBlank()")
 @RequiredArgsConstructor
 public class ErpProductionController {
 

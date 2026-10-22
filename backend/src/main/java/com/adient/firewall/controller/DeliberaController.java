@@ -203,6 +203,13 @@ public class DeliberaController {
             result.put("reference", r.get("REFERENCE"));
             result.put("version",   r.get("VERSION"));
             result.put("ligne",     r.get("LIGNE"));
+            Optional<Map<String, Object>> referenceInfo =
+                    qRepo.lookupBarcode(qRepo.getProjectNames(), code);
+            referenceInfo.ifPresent(info -> {
+                result.put("pdef", info.get("PDEF"));
+                result.put("designation", info.get("DESIGNATION"));
+                result.putIfAbsent("reference", info.get("REF_DETAIL"));
+            });
             return ResponseEntity.ok(ApiResponse.ok(result));
         }
 
@@ -275,6 +282,7 @@ public class DeliberaController {
     }
 
     @PostMapping("/records")
+    @Transactional("oracleTransactionManager")
     public ResponseEntity<ApiResponse<Map<String, Long>>> createRecord(
             @RequestBody Map<String, Object> body) {
 
@@ -284,6 +292,7 @@ public class DeliberaController {
         String version       = (String) body.get("version");
         String ligne         = (String) body.get("ligne");
         String checkpoint    = (String) body.get("checkpoint");
+        List<Map<String, String>> checkpointResults = parseCheckpointResults(body.get("checkpointResults"));
         Long   posteId       = body.get("posteId") instanceof Number n ? n.longValue() : null;
         Long   couturiereId  = body.get("couturiereId") instanceof Number n ? n.longValue() : null;
         String statutReprise = body.get("statutReprise") instanceof String s ? s : null;
@@ -303,6 +312,7 @@ public class DeliberaController {
                 (String) d.get("descDefaut"),
                 "INITIAL");
         }
+        if (!checkpointResults.isEmpty()) repo.replaceRecordCheckpoints(recId, checkpointResults);
         if (!defauts.isEmpty()) defautCouturiereSvc.checkAlerte(repo.findRecordById(recId));
 
         return ResponseEntity.ok(ApiResponse.ok(Map.of("id", recId), "Enregistrement créé"));
@@ -312,7 +322,55 @@ public class DeliberaController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> getRecord(@PathVariable Long id) {
         Map<String, Object> rec = new LinkedHashMap<>(repo.findRecordById(id));
         rec.put("defauts", mapDefauts(repo.findDefautsByRecordId(id)));
+        rec.put("checkpointResults", repo.findRecordCheckpoints(id));
         return ResponseEntity.ok(ApiResponse.ok(rec));
+    }
+
+    @PutMapping("/records/{id}/checkpoints")
+    @Transactional("oracleTransactionManager")
+    public ResponseEntity<ApiResponse<Void>> updateRecordCheckpoints(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> body) {
+        repo.lockRecordStatus(id);
+        repo.replaceRecordCheckpoints(id, parseCheckpointResults(body.get("checkpointResults")));
+        return ResponseEntity.ok(ApiResponse.ok(null, "Résultats des checkpoints enregistrés"));
+    }
+
+    private List<Map<String, String>> parseCheckpointResults(Object raw) {
+        if (raw == null) return List.of();
+        if (!(raw instanceof List<?> rows)) throw new IllegalArgumentException("Liste de checkpoints invalide");
+        List<Map<String, String>> results = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (Object row : rows) {
+            if (!(row instanceof Map<?, ?> values))
+                throw new IllegalArgumentException("Résultat de checkpoint invalide");
+            Object checkpointValue = values.get("checkpoint");
+            Object statusValue = values.get("status");
+            String checkpoint = checkpointValue instanceof String value ? value.trim() : "";
+            String status = statusValue instanceof String value ? value.trim().toUpperCase(Locale.ROOT) : "";
+            if (checkpoint.isEmpty() || checkpoint.length() > 500)
+                throw new IllegalArgumentException("Nom de checkpoint invalide");
+            if (!"OK".equals(status) && !"NOK".equals(status))
+                throw new IllegalArgumentException("Chaque checkpoint doit avoir le statut OK ou NOK");
+            if (!seen.add(checkpoint))
+                throw new IllegalArgumentException("Un checkpoint ne peut apparaître qu'une fois");
+            Map<String, String> result = new LinkedHashMap<>();
+            result.put("checkpoint", checkpoint);
+            result.put("status", status);
+            result.put("project", stringValue(values.get("project")));
+            result.put("ligne", stringValue(values.get("ligne")));
+            result.put("pdef", stringValue(values.get("pdef")));
+            result.put("fas", stringValue(values.get("fas")));
+            result.put("designation", stringValue(values.get("designation")));
+            result.put("version", stringValue(values.get("version")));
+            result.put("refDetail", stringValue(values.get("refDetail")));
+            results.add(result);
+        }
+        return results;
+    }
+
+    private String stringValue(Object value) {
+        return value instanceof String text ? text : null;
     }
 
     @PutMapping("/records/{id}/verify")

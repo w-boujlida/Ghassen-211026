@@ -28,3 +28,31 @@ backups. Do not expose Oracle port 1521 to the Internet.
 
 This public export requires secrets through environment variables instead of
 embedding the original deployment credentials. It is not a security audit.
+
+## Employee stamps
+
+In Operators, enter the employee's single required stamp code directly when
+creating or editing the employee. There is no separate Stamps tab. The code is
+created automatically if needed, and a code already assigned to another employee
+is rejected. Replacing a stamp releases the previous assignment; deleting an
+employee releases their stamp without deleting the code or quality history.
+
+Employee Excel imports require one stamp per new employee in the `Tampon` column
+(legacy `Tampon(s)` and `Tampons` headers are also accepted). Unknown codes are
+created automatically. Employee exports include a single `Tampon` column.
+
+## Daily local code commits
+
+Run `bash bin/daily-local-commit.sh` to commit all non-ignored changes locally.
+The script requires a Git author configured in this repository, skips unchanged
+trees, and refuses to run during a merge, rebase, cherry-pick, revert, or bisect.
+Failures are written to stderr. It never pushes to a remote.
+
+On this server, the `fw_app` user crontab runs it daily at 23:00. The server
+timezone must remain `Africa/Tunis` for that schedule. Inspect the schedule with
+`crontab -l` and the log in `.git/daily-local-commit.log`.
+
+These commits save code history on the same disk, not an independent backup.
+Ignored files (including `.env`, Oracle data, dependencies, and build outputs)
+are excluded. Keep secrets out of source files and maintain separate database
+and off-machine backups.

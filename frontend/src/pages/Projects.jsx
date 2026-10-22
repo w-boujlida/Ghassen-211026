@@ -31,6 +31,12 @@ function ProjectSteps({ step }) {
 export default function Projects() {
   const { isAdmin, canModifyProjects, canCreateProjects } = useAuth()
   const [tab, setTab]                 = useState('projects')
+  const [metadataMessages, setMetadataMessages] = useState([])
+  const [metadataCheckpoints, setMetadataCheckpoints] = useState([])
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataError, setMetadataError] = useState('')
+  const [metadataSearch, setMetadataSearch] = useState('')
+  const metadataImportFileRef = useRef(null)
 
   // ── Projects state ──
   const [projects, setProjects]       = useState([])
@@ -174,6 +180,16 @@ export default function Projects() {
   useEffect(() => {
     if (tab === 'defcodes' && defCodes.length === 0) loadDefCodes()
     if (tab === 'postes') loadPostes()
+    if (tab === 'messages' || tab === 'checkpoints') {
+      setMetadataLoading(true)
+      setMetadataError('')
+      const loadMetadata = tab === 'messages'
+        ? projectsApi.getAllRefMessages().then(d => setMetadataMessages(d?.messages || []))
+        : projectsApi.getAllRefCheckpoints().then(d => setMetadataCheckpoints(d?.checkpoints || []))
+      loadMetadata
+        .catch(e => setMetadataError(apiErr(e)))
+        .finally(() => setMetadataLoading(false))
+    }
   }, [tab]) // eslint-disable-line
 
   const loadRefs = (name, page = 1) => {
@@ -186,6 +202,113 @@ export default function Projects() {
   }
 
   const apiErr = (e) => e.response?.data?.error || e.response?.data?.message || e.message
+
+  const loadMetadataRows = async (type) => {
+    if (type === 'messages') {
+      const data = await projectsApi.getAllRefMessages()
+      setMetadataMessages(data?.messages || [])
+    } else {
+      const data = await projectsApi.getAllRefCheckpoints()
+      setMetadataCheckpoints(data?.checkpoints || [])
+    }
+  }
+
+  const handleMetadataExcel = async (event, type) => {
+    const file = event.target.files?.[0]
+    if (!file || !type) return
+    event.target.value = ''
+    setSaving(true)
+    setMetadataError('')
+    try {
+      const rows = await parseExcelFile(file)
+      const normalize = value => String(value ?? '').toUpperCase().normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z0-9]/g, '')
+      const valueKey = type === 'messages' ? 'MESSAGE' : 'CHECKPOINT'
+      const mapped = rows.map((row, index) => {
+        const columns = Object.fromEntries(Object.entries(row).map(([key, value]) => [normalize(key), value]))
+        const get = (...keys) => {
+          for (const key of keys) {
+            const value = columns[normalize(key)]
+            if (value !== undefined && value !== null && String(value).trim()) return String(value).trim()
+          }
+          return ''
+        }
+        return {
+          project: get('PROJECT_NAME', 'PROJECT', 'PROJET').toUpperCase(),
+          pdef: get('PDEF'),
+          value: get(valueKey, type === 'messages' ? 'MESSAGE DE VERIFICATION' : 'POINT DE CONTROLE'),
+          rowNumber: index + 2,
+        }
+      })
+      const valid = mapped.filter(row => row.project && row.pdef && row.value)
+      if (!valid.length) {
+        throw new Error(`Aucune ligne valide. Colonnes requises : PROJECT_NAME, PDEF, ${valueKey}.`)
+      }
+
+      const groups = new Map()
+      for (const row of valid) {
+        const key = JSON.stringify([row.project, row.pdef])
+        if (!groups.has(key)) groups.set(key, { project: row.project, pdef: row.pdef, values: [] })
+        groups.get(key).values.push(row.value)
+      }
+
+      let added = 0
+      const errors = mapped.filter(row => !row.project || !row.pdef || !row.value)
+        .map(row => `Ligne ${row.rowNumber} : projet, PDEF ou ${valueKey} manquant`)
+      for (const group of groups.values()) {
+        try {
+          const existing = type === 'messages'
+            ? (await projectsApi.getRefMessages(group.project, group.pdef))?.messages || []
+            : (await projectsApi.getRefCheckpoints(group.project, group.pdef))?.checkpoints || []
+          const merged = [...existing]
+          const known = new Set(existing.map(value => String(value).trim()))
+          for (const value of group.values) {
+            if (!known.has(value)) {
+              merged.push(value)
+              known.add(value)
+              added++
+            }
+          }
+          if (merged.length !== existing.length) {
+            if (type === 'messages') await projectsApi.setRefMessages(group.project, group.pdef, merged)
+            else await projectsApi.setRefCheckpoints(group.project, group.pdef, merged)
+          }
+        } catch (error) {
+          errors.push(`${group.project} / ${group.pdef} : ${apiErr(error)}`)
+        }
+      }
+
+      await loadMetadataRows(type)
+      setMetadataError(errors.length ? errors.join(' · ') : '')
+      showToast(`${added} élément(s) ajouté(s)${errors.length ? `, ${errors.length} erreur(s)` : ''}`, errors.length ? 'error' : 'success')
+    } catch (error) {
+      setMetadataError(apiErr(error))
+      showToast(apiErr(error), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const exportMetadataExcel = (type, template = false) => {
+    const isMessages = type === 'messages'
+    const valueKey = isMessages ? 'MESSAGE' : 'CHECKPOINT'
+    const filenamePrefix = isMessages ? 'messages_verification' : 'checkpoints'
+    if (template) {
+      exportToExcel([{ PROJECT_NAME: '', PDEF: '', [valueKey]: '' }],
+        `modele_ajout_${filenamePrefix}.xlsx`, 'Ajout')
+      return
+    }
+    const rows = (isMessages ? metadataMessages : metadataCheckpoints).map(row => ({
+      PROJECT_NAME: row.PROJECT_NAME,
+      PDEF: row.PDEF,
+      [valueKey]: row[valueKey],
+    }))
+    if (!rows.length) {
+      showToast('Aucune donnée à exporter.', 'error')
+      return
+    }
+    exportToExcel(rows, `${filenamePrefix}.xlsx`, isMessages ? 'Messages' : 'Checkpoints')
+  }
 
   const openRefs = (name, isNew = false) => {
     setRefsProject(name); setCreatingRefs(isNew); setRefSubModal(null)
@@ -677,6 +800,14 @@ export default function Projects() {
           <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
           Postes
         </button>
+        <button className={`proj-tab${tab === 'checkpoints' ? ' active' : ''}`} onClick={() => setTab('checkpoints')}>
+          <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Checkpoints
+        </button>
+        <button className={`proj-tab${tab === 'messages' ? ' active' : ''}`} onClick={() => setTab('messages')}>
+          <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z"/></svg>
+          Messages de vérification
+        </button>
       </div>
 
       {/* ══ PROJECTS PANEL ══ */}
@@ -957,6 +1088,83 @@ export default function Projects() {
           </div>
         </div>
       )}
+
+      {(tab === 'checkpoints' || tab === 'messages') && (() => {
+        const isCheckpoints = tab === 'checkpoints'
+        const rows = isCheckpoints ? metadataCheckpoints : metadataMessages
+        const valueKey = isCheckpoints ? 'CHECKPOINT' : 'MESSAGE'
+        const query = metadataSearch.trim().toLowerCase()
+        const filtered = rows.filter(row =>
+          [row.PROJECT_NAME, row.PDEF, row[valueKey]]
+            .some(value => String(value ?? '').toLowerCase().includes(query))
+        )
+        return (
+          <div className="proj-panel">
+            <div className="table-container">
+              <div className="table-header">
+                <h3 className="table-title">
+                  {isCheckpoints ? 'Checkpoints par référence' : 'Messages de vérification par référence'}
+                  <span className="badge-count">{rows.length}</span>
+                </h3>
+                <div className="table-controls">
+                  <input
+                    ref={metadataImportFileRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    hidden
+                    onChange={event => handleMetadataExcel(event, isCheckpoints ? 'checkpoints' : 'messages')}
+                  />
+                  {canModifyProjects && (
+                    <>
+                      <button className="add-btn" style={{ background: '#059669' }}
+                        onClick={() => metadataImportFileRef.current?.click()} disabled={saving || metadataLoading}>
+                        Importer Excel
+                      </button>
+                      <button className="add-btn" style={{ background: '#64748b' }}
+                        onClick={() => exportMetadataExcel(tab, true)} disabled={saving}>
+                        Modèle d’ajout
+                      </button>
+                    </>
+                  )}
+                  <button className="add-btn" style={{ background: rows.length ? '#0f766e' : '#94a3b8' }}
+                    onClick={() => exportMetadataExcel(tab)} disabled={rows.length === 0 || saving}>
+                    Exporter Excel
+                  </button>
+                </div>
+              </div>
+              {metadataError && <div className="alert alert-error" role="alert" style={{ margin: 12 }}>{metadataError}</div>}
+              <div style={{ padding: '8px 16px 0' }}>
+                <div className="search-container" style={{ maxWidth: 400 }}>
+                  <span className="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+                  <input type="text" className="search-input"
+                    placeholder="Rechercher un projet, PDEF ou texte…"
+                    value={metadataSearch} onChange={e => setMetadataSearch(e.target.value)} />
+                </div>
+              </div>
+              <div className="table-wrapper">
+                {metadataLoading ? <div className="loading"><div className="spinner" /></div> : (
+                  <table>
+                    <thead><tr><th>Projet</th><th>PDEF</th><th>{isCheckpoints ? 'Checkpoint' : 'Message de vérification'}</th></tr></thead>
+                    <tbody>
+                      {filtered.length === 0 ? (
+                        <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+                          {metadataError ? 'Impossible de charger les données' : rows.length === 0 ? 'Aucune donnée enregistrée' : 'Aucun résultat trouvé'}
+                        </td></tr>
+                      ) : filtered.map(row => (
+                        <tr key={row.ID}>
+                          <td>{row.PROJECT_NAME}</td>
+                          <td>{row.PDEF}</td>
+                          <td>{row[valueKey]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ══ POSTE MODAL ══ */}
       {posteModal && (

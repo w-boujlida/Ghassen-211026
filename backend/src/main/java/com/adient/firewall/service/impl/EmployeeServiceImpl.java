@@ -12,9 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -35,34 +35,38 @@ public class EmployeeServiceImpl implements IEmployeeService {
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public void create(EmployeeDto e) {
-        repo.insertEmployee(e);
+        EmployeeDto employee = withTampon(e);
+        repo.synchronizeEmployeeTampon(employee.tampon(), employee.mat());
+        repo.insertEmployee(employee);
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public void update(EmployeeDto e) {
-        int rows = repo.updateEmployee(e);
+        EmployeeDto employee = withTampon(e);
+        int rows = repo.updateEmployee(employee);
         if (rows == 0) throw new NoSuchElementException("Employee not found: " + e.mat());
+        repo.synchronizeEmployeeTampon(employee.tampon(), employee.mat());
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public void delete(String mat) {
         int rows = repo.deleteEmployee(mat);
         if (rows == 0) throw new NoSuchElementException("Employee not found: " + mat);
+        repo.releaseEmployeeTampons(mat);
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public Map<String, Integer> importEmployees(List<EmployeeImportDto> employees) {
         if (employees == null || employees.isEmpty()) {
             throw new IllegalArgumentException("Aucune ligne à importer");
         }
 
         Set<String> seenMats = new HashSet<>();
-        Map<String, String> tamponOwners = new HashMap<>();
         int inserted = 0;
         int skipped = 0;
 
@@ -82,7 +86,7 @@ public class EmployeeServiceImpl implements IEmployeeService {
                 }
             }
 
-            String normalizedMat = mat.toUpperCase();
+            String normalizedMat = mat.toUpperCase(Locale.ROOT);
             if (!seenMats.add(normalizedMat) || repo.employeeExists(mat)) {
                 skipped++;
                 continue;
@@ -90,29 +94,19 @@ public class EmployeeServiceImpl implements IEmployeeService {
 
             List<String> rowTampons = row.tampons() == null ? List.of() : row.tampons().stream()
                     .filter(code -> code != null && !code.isBlank())
-                    .map(String::trim)
+                    .map(code -> code.trim().toUpperCase(Locale.ROOT))
                     .distinct()
                     .toList();
-            for (String code : rowTampons) {
-                String normalizedCode = code.toUpperCase();
-                String priorOwner = tamponOwners.putIfAbsent(normalizedCode, mat);
-                if (priorOwner != null && !priorOwner.equalsIgnoreCase(mat)) {
-                    throw new IllegalArgumentException("Ligne " + rowNumber + " : le tampon " + code + " est attribué plusieurs fois");
-                }
-                Map<String, Object> tampon = repo.findTamponByCode(code)
-                        .orElseThrow(() -> new IllegalArgumentException("Ligne " + rowNumber + " : tampon introuvable " + code));
-                Object owner = tampon.get("MAT");
-                if (owner != null && !owner.toString().equalsIgnoreCase(mat)) {
-                    throw new IllegalArgumentException("Ligne " + rowNumber + " : le tampon " + code + " est déjà attribué");
-                }
+            if (rowTampons.size() != 1) {
+                throw new IllegalArgumentException("Ligne " + rowNumber + " : un seul tampon est obligatoire par employé");
             }
 
-            String primaryTampon = rowTampons.isEmpty() ? null : rowTampons.get(0);
-            EmployeeDto employee = new EmployeeDto(mat, row.name().trim(), primaryTampon,
+            EmployeeDto employee = new EmployeeDto(mat, row.name().trim(), rowTampons.get(0),
                     row.dateEmbauche(), row.projet(), row.equipe(), row.equipe2(), row.supervisor());
-            repo.insertEmployee(employee);
-            for (String code : rowTampons) {
-                repo.assignTamponToEmployee(code, mat);
+            try {
+                create(employee);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Ligne " + rowNumber + " : " + e.getMessage(), e);
             }
             inserted++;
         }
@@ -120,6 +114,18 @@ public class EmployeeServiceImpl implements IEmployeeService {
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
+
+    private EmployeeDto withTampon(EmployeeDto e) {
+        if (e.tampon() == null || e.tampon().isBlank()) {
+            throw new IllegalArgumentException("Code tampon requis");
+        }
+        String code = e.tampon().trim().toUpperCase(Locale.ROOT);
+        if (code.length() > 50 || code.contains(",") || code.contains(";") || code.contains("|")) {
+            throw new IllegalArgumentException("Saisissez un seul code tampon (50 caractères maximum)");
+        }
+        return new EmployeeDto(e.mat(), e.name(), code, e.dateEmbauche(),
+                e.projet(), e.equipe(), e.equipe2(), e.supervisor());
+    }
 
     private String getParam(Map<String, String> f, String... keys) {
         for (String k : keys) {

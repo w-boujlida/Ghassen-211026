@@ -19,6 +19,8 @@ public class ProjectServiceImpl implements IProjectService {
 
     /** System projects that cannot be renamed or deleted by anyone. */
     private static final Set<String> LOCKED_PROJECTS = Set.of("P6", "P7", "P674", "CR3", "J4U", "AUDI", "SK316_7");
+    private static final Set<String> RESERVED_PROJECT_NAMES =
+            Set.of("DEF", "POLY", "APP_USERS", "SUPERVISORS", "REF_VERIF_MESSAGES", "REF_CHECKPOINTS");
 
     @Override
     public List<Map<String, Object>> getProjects() {
@@ -49,6 +51,8 @@ public class ProjectServiceImpl implements IProjectService {
         String pn = QualityRepository.safe(name.trim());
         String pl = pn.toLowerCase();
 
+        if (RESERVED_PROJECT_NAMES.contains(pn))
+            throw new IllegalStateException("Le nom « " + pn + " » est réservé par le système.");
         if (repo.tableExists(pn)) throw new IllegalStateException("Project '" + pn + "' already exists.");
 
         JdbcTemplate db = repo.getJdbcTemplate();
@@ -295,6 +299,11 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     @Override
+    public List<Map<String, Object>> getAllRefVerifMessages() {
+        return repo.getAllRefVerifMessages();
+    }
+
+    @Override
     @Transactional
     public void setRefVerifMessages(String project, String pdef, List<String> messages) {
         String pn = QualityRepository.safe(project);
@@ -305,6 +314,11 @@ public class ProjectServiceImpl implements IProjectService {
     public List<String> getRefCheckpoints(String project, String pdef) {
         String pn = QualityRepository.safe(project);
         return repo.getRefCheckpoints(pn, pdef);
+    }
+
+    @Override
+    public List<Map<String, Object>> getAllRefCheckpoints() {
+        return repo.getAllRefCheckpoints();
     }
 
     @Override

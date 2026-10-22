@@ -29,9 +29,13 @@ public interface IProjectService {
 
     List<String> getRefVerifMessages(String project, String pdef);
 
+    List<Map<String, Object>> getAllRefVerifMessages();
+
     void setRefVerifMessages(String project, String pdef, List<String> messages);
 
     List<String> getRefCheckpoints(String project, String pdef);
+
+    List<Map<String, Object>> getAllRefCheckpoints();
 
     void setRefCheckpoints(String project, String pdef, List<String> checkpoints);
 

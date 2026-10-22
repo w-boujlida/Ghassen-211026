@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom'
 import { employeesApi } from '../api/employees.api.js'
 import { lookupApi } from '../api/lookup.api.js'
 import { projectsApi } from '../api/projects.api.js'
-import { tamponsApi } from '../api/tampons.api.js'
 import { deliberaApi } from '../api/delibera.api.js'
 import { operatorsApi } from '../api/operators.api.js'
 import Pagination from '../components/Pagination.jsx'
@@ -44,79 +43,7 @@ function operatorId(kind, row) {
 }
 
 function operatorName(kind, row) {
-  return kind === 'employees' || kind === 'supervisors' ? row.name : kind === 'tampons' ? row.code : row.nom
-}
-
-// ── TamponTagSelect component ──────────────────────────────────────────────
-function TamponTagSelect({ allTampons, selectedCodes, onChange, employeeMat }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-
-  // Tampons available: unassigned OR already assigned to this employee
-  const available = allTampons.filter(t =>
-    !t.mat || t.mat === employeeMat ||
-    selectedCodes.includes(t.code)
-  )
-  const filtered = available.filter(t =>
-    t.code.toLowerCase().includes(search.toLowerCase()) ||
-    (t.description || '').toLowerCase().includes(search.toLowerCase())
-  )
-
-  const toggle = (code) => {
-    if (selectedCodes.includes(code)) {
-      onChange(selectedCodes.filter(c => c !== code))
-    } else {
-      onChange([...selectedCodes, code])
-    }
-  }
-
-  return (
-    <div style={{ position: 'relative' }}>
-      {/* Selected tags */}
-      <div
-        style={{ minHeight: 38, border: '1.5px solid #e2e8f0', borderRadius: 8, padding: '4px 8px', cursor: 'pointer', display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', background: '#fff' }}
-        onClick={() => setOpen(v => !v)}
-      >
-        {selectedCodes.length === 0 && <span style={{ color: '#94a3b8', fontSize: 13 }}>Sélectionner des tampons…</span>}
-        {selectedCodes.map(code => (
-          <span key={code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f0fdf4', color: '#15803d', border: '1px solid #c7d2fe', borderRadius: 20, padding: '2px 8px', fontSize: 12, fontWeight: 600 }}>
-            {code}
-            <button type="button" onClick={e => { e.stopPropagation(); toggle(code) }}
-              style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
-          </span>
-        ))}
-        <span style={{ marginLeft: 'auto', color: '#94a3b8' }}>▾</span>
-      </div>
-
-      {/* Dropdown */}
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', marginTop: 2, maxHeight: 220, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '6px 10px', borderBottom: '1px solid #f1f5f9' }}>
-            <input
-              autoFocus
-              type="text"
-              placeholder="Filtrer..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onClick={e => e.stopPropagation()}
-              style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 8px', fontSize: 13, outline: 'none' }}
-            />
-          </div>
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filtered.length === 0 && <div style={{ padding: '10px 12px', fontSize: 12, color: '#94a3b8' }}>Aucun tampon disponible</div>}
-            {filtered.map(t => (
-              <div key={t.id} onClick={() => toggle(t.code)}
-                style={{ padding: '7px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, background: selectedCodes.includes(t.code) ? '#f0fdf4' : 'transparent' }}>
-                <input type="checkbox" readOnly checked={selectedCodes.includes(t.code)} style={{ cursor: 'pointer' }} />
-                <strong style={{ fontFamily: 'monospace' }}>{t.code}</strong>
-                {t.description && <span style={{ color: '#64748b', fontSize: 11 }}>— {t.description}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  return kind === 'employees' || kind === 'supervisors' ? row.name : row.nom
 }
 
 export default function Employees() {
@@ -132,16 +59,12 @@ export default function Employees() {
   // ── Supervisors state ──
   const [supervisors, setSupervisors]     = useState([])
   const [supLoading, setSupLoading]       = useState(false)
-  // ── Tampons state ──
-  const [tampons, setTampons]             = useState([])
-  const [tamponsLoading, setTamponsLoading] = useState(false)
   // ── Projects list (for dropdown) ──
   const [projects, setProjects]           = useState([])
   const [supervisorList, setSupervisorList] = useState([])
   // ── Employee modal ──
   const [modal, setModal]                 = useState(null)
   const [form, setForm]                   = useState(EMPTY_EMP)
-  const [selectedTampons, setSelectedTampons] = useState([])
   const [saving, setSaving]               = useState(false)
   const [formError, setFormError]         = useState('')
   const [isEditMode, setIsEditMode]       = useState(false)
@@ -150,17 +73,8 @@ export default function Employees() {
   const [supName, setSupName]             = useState('')
   const [supSaving, setSupSaving]         = useState(false)
   const [supError, setSupError]           = useState('')
-  // ── Tampon modal ──
-  const [tamponModal, setTamponModal]     = useState(null)  // null | 'add' | 'edit'
-  const [tamponForm, setTamponForm]       = useState({ code: '', description: '' })
-  const [editingTampon, setEditingTampon] = useState(null)
-  const [tamponSaving, setTamponSaving]   = useState(false)
-  const [tamponError, setTamponError]     = useState('')
-  // ── Available tampons for current modal ──
-  const [modalTampons, setModalTampons]   = useState([])
   // ── Search states for tabs ──
   const [supSearch, setSupSearch]         = useState('')
-  const [tamponSearch, setTamponSearch]   = useState('')
   // ── Couturières state ──
   const [couturieres, setCouturieres]           = useState([])
   const [couturieresLoading, setCouturieresLoading] = useState(false)
@@ -192,29 +106,24 @@ export default function Employees() {
     setBulkNotice('')
     setPreservedTampons([])
     setBulkError('')
-  }, [tab, filters, supSearch, tamponSearch, couturiereSearch, couturiereProjetFilter])
+  }, [tab, filters, supSearch, couturiereSearch, couturiereProjetFilter])
 
   const filteredSupervisors = supervisors
     .map(s => typeof s === 'string' ? { name: s } : s)
     .filter(s => s.name.toLowerCase().includes(supSearch.trim().toLowerCase()))
-  const filteredTampons = tampons.filter(t => {
-    const q = tamponSearch.trim().toLowerCase()
-    return t.code.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q)
-      || (t.employeeName || '').toLowerCase().includes(q) || (t.mat || '').toLowerCase().includes(q)
-  })
   const filteredCouturieres = couturieres.filter(c => {
     const q = couturiereSearch.trim().toLowerCase()
     return c.nom.toLowerCase().includes(q) || c.matricule.toLowerCase().includes(q)
   })
   const visibleRows = tab === 'employees' ? records : tab === 'supervisors'
-    ? filteredSupervisors : tab === 'tampons' ? filteredTampons : filteredCouturieres
+    ? filteredSupervisors : filteredCouturieres
   const selectedIds = new Set(selectedRows.map(row => operatorId(tab, row)))
   const allMatchingSelected = selectedRows.length > 0
     && selectedRows.length === (tab === 'employees' ? pagination.totalRecords : visibleRows.length)
     && visibleRows.every(row => selectedIds.has(operatorId(tab, row)))
   const selectionBusy = selectingAll || bulkSaving
   const tabLoading = tab === 'employees' ? loading : tab === 'supervisors'
-    ? supLoading : tab === 'tampons' ? tamponsLoading : couturieresLoading
+    ? supLoading : couturieresLoading
 
   const toggleRow = (row) => {
     const id = operatorId(tab, row)
@@ -266,7 +175,6 @@ export default function Employees() {
         preserved.length > 0 ? ` ${preserved.length} tampon(s) affecté(s) conservé(s). Aucune affectation n’a été modifiée.` : ''}`)
       if (tab === 'employees' && bulkModal === 'delete') setPage(1)
       loadData()
-      loadTampons()
       loadSupervisors()
       if (tab === 'couturieres') loadCouturieres()
       const list = await lookupApi.supervisorsList()
@@ -284,8 +192,6 @@ export default function Employees() {
     { key: 'equipe2', label: 'Équipe', options: ['A', 'B'] },
     { key: 'supervisor', label: 'Superviseur', options: supervisorList.map(s => typeof s === 'string' ? s : s.name) },
     { key: 'dateEmbauche', label: "Date d'embauche", type: 'date' },
-  ] : tab === 'tampons' ? [
-    { key: 'description', label: 'Description', type: 'text' },
   ] : [
     { key: 'projet', label: 'Projet', options: projects.map(p => p.name) },
     { key: 'equipe', label: 'Équipe', options: ['A', 'B'] },
@@ -347,15 +253,6 @@ export default function Employees() {
       .finally(() => setSupLoading(false))
   }, [])
 
-  // Load tampons tab
-  const loadTampons = useCallback(() => {
-    setTamponsLoading(true)
-    tamponsApi.getAll()
-      .then(d => setTampons(Array.isArray(d) ? d : []))
-      .catch(e => setBulkError('Chargement des tampons : ' + (e.response?.data?.error || e.message)))
-      .finally(() => setTamponsLoading(false))
-  }, [])
-
   // Load dropdowns on mount
   useEffect(() => {
     projectsApi.getProjects()
@@ -364,9 +261,6 @@ export default function Employees() {
     lookupApi.supervisorsList()
       .then(d => setSupervisorList(Array.isArray(d) ? d : (d?.supervisors || [])))
       .catch(() => setSupervisorList([]))
-    tamponsApi.getAll()
-      .then(d => setTampons(Array.isArray(d) ? d : []))
-      .catch(() => setTampons([]))
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -382,7 +276,6 @@ export default function Employees() {
 
   useEffect(() => {
     if (tab === 'supervisors' && supervisors.length === 0) loadSupervisors()
-    if (tab === 'tampons') loadTampons()
     if (tab === 'couturieres') loadCouturieres()
   }, [tab, loadCouturieres]) // eslint-disable-line
 
@@ -395,71 +288,38 @@ export default function Employees() {
   const setFilter = (key, val) => { setFilters(f => ({ ...f, [key]: val })); setPage(1) }
 
   // Employee CRUD
-  const openAdd = async () => {
-    setForm(EMPTY_EMP); setSelectedTampons([]); setFormError(''); setIsEditMode(false)
-    try {
-      const avail = await tamponsApi.getAvailable()
-      setModalTampons(Array.isArray(avail) ? avail : [])
-    } catch {
-      setModalTampons(tampons)
-    }
+  const openAdd = () => {
+    setForm(EMPTY_EMP); setFormError(''); setIsEditMode(false)
     setModal('add')
   }
-  const openEdit = async (emp) => {
+  const openEdit = (emp) => {
     setForm({ mat: emp.mat, name: emp.name, tampon: emp.tampon || '',
       dateEmbauche: emp.dateEmbauche || '', projet: emp.projet || 'CSL',
       equipe: emp.equipe || '', equipe2: emp.equipe2 || 'A', supervisor: emp.supervisor || '' })
     setFormError(''); setIsEditMode(true)
-    try {
-      const [empTampons, avail] = await Promise.all([
-        tamponsApi.getByEmployee(emp.mat),
-        tamponsApi.getAvailableForEmployee(emp.mat),
-      ])
-      setSelectedTampons((Array.isArray(empTampons) ? empTampons : []).map(t => t.code))
-      setModalTampons(Array.isArray(avail) ? avail : [])
-    } catch {
-      setSelectedTampons([])
-      setModalTampons(tampons)
-    }
     setModal('edit')
   }
 
   const handleSave = async () => {
     if (!form.mat || !form.name) { setFormError('Matricule et nom sont requis'); return }
+    if (!form.tampon.trim()) { setFormError('Code tampon requis'); return }
     setSaving(true); setFormError('')
     try {
-      // Use first selected tampon as primary tampon (backward compat with POLY.TAMPON)
-      const primaryTampon = selectedTampons[0] || form.tampon || ''
-      const empData = { ...form, tampon: primaryTampon }
+      const empData = { ...form, tampon: form.tampon.trim().toUpperCase() }
       if (!isEditMode) {
         await employeesApi.create(empData)
       } else {
         await employeesApi.update(empData)
       }
-      // Sync tampon assignments
-      if (tampons.length > 0) {
-        // Unassign tampons that were previously assigned to this employee but are no longer selected
-        for (const t of tampons) {
-          const wasAssigned = t.mat === form.mat
-          const nowSelected = selectedTampons.includes(t.code)
-          if (wasAssigned && !nowSelected) {
-            await tamponsApi.unassign(t.id).catch(() => {})
-          } else if (!wasAssigned && nowSelected) {
-            await tamponsApi.assign(t.id, form.mat).catch(() => {})
-          }
-        }
-      }
       setSelectedRows([])
       setModal(null); loadData()
-      // Refresh tampons list
-      tamponsApi.getAll().then(d => setTampons(Array.isArray(d) ? d : [])).catch(() => {})
     } catch (e) { setFormError(e.response?.data?.error || e.response?.data?.message || e.message) }
     finally { setSaving(false) }
   }
 
   const handleDelete = async (mat) => {
     if (!confirm(`Supprimer l'opérateur ${mat} ?`)) return
-    try { await employeesApi.delete(mat); setSelectedRows([]); loadData(); loadTampons() }
+    try { await employeesApi.delete(mat); setSelectedRows([]); loadData() }
     catch (e) { alert(e.response?.data?.error || e.message) }
   }
 
@@ -480,40 +340,6 @@ export default function Employees() {
     if (!confirm(`Supprimer le superviseur "${name}" ?`)) return
     try { await lookupApi.deleteSupervisor(name); setSelectedRows([]); loadSupervisors() }
     catch (e) { alert(e.message) }
-  }
-
-  // Tampon CRUD
-  const openAddTampon = () => {
-    setTamponForm({ code: '', description: '' }); setTamponError(''); setEditingTampon(null); setTamponModal('add')
-  }
-  const openEditTampon = (t) => {
-    setTamponForm({ code: t.code, description: t.description || '' }); setTamponError(''); setEditingTampon(t); setTamponModal('edit')
-  }
-  const handleSaveTampon = async () => {
-    if (!tamponForm.code.trim()) { setTamponError('Code tampon requis'); return }
-    setTamponSaving(true); setTamponError('')
-    try {
-      if (tamponModal === 'add') {
-        await tamponsApi.create(tamponForm.code, tamponForm.description)
-      } else {
-        await tamponsApi.update(editingTampon.id, tamponForm.code, tamponForm.description)
-      }
-      setSelectedRows([])
-      setTamponModal(null); loadTampons()
-      tamponsApi.getAll().then(d => setTampons(Array.isArray(d) ? d : [])).catch(() => {})
-    } catch (e) {
-      const msg = e.response?.data?.error || e.response?.data?.message || e.message
-      setTamponError(msg.includes('unique') || msg.includes('UNIQUE') || e.response?.status === 409
-        ? 'Ce code tampon existe déjà'
-        : msg)
-    }
-    finally { setTamponSaving(false) }
-  }
-  const handleDeleteTampon = async (t) => {
-    if (t.mat) { alert('Impossible de supprimer un tampon assigné à un employé'); return }
-    if (!confirm(`Supprimer le tampon "${t.code}" ?`)) return
-    try { await tamponsApi.delete(t.id); setSelectedRows([]); loadTampons() }
-    catch (e) { alert(e.response?.data?.error || e.response?.data?.message || e.message) }
   }
 
   // Couturière CRUD
@@ -554,13 +380,11 @@ export default function Employees() {
     try {
       const data = await employeesApi.exportAll(filters)
       const rows = (data.records || []).map((emp, idx) => {
-        const empTampons = tampons.filter(t => t.mat === emp.mat).map(t => t.code)
-        const displayTampons = empTampons.length > 0 ? empTampons : (emp.tampon ? [emp.tampon] : [])
         return {
           '#': idx + 1,
           'Matricule': emp.mat,
           'Nom': emp.name,
-          'Tampon(s)': displayTampons.join(', ') || '—',
+          'Tampon': emp.tampon || '',
           'Date Embauche': emp.dateEmbauche || '',
           'Fonction': emp.projet || '',
           'Projet': emp.equipe || '',
@@ -587,16 +411,6 @@ export default function Employees() {
       'Nom superviseur': typeof s === 'string' ? s : s.name,
     }))
     exportToExcel(rows, 'Superviseurs.xlsx', 'Superviseurs')
-  }
-
-  const handleExportTampons = () => {
-    const rows = tampons.map(t => ({
-      'Code tampon': t.code,
-      Description: t.description || '',
-      Matricule: t.mat || '',
-      'Nom employé': t.employeeName || '',
-    }))
-    exportToExcel(rows, 'Tampons.xlsx', 'Tampons')
   }
 
   const handleExportCouturieres = () => {
@@ -636,7 +450,6 @@ export default function Employees() {
         if (invalidRow !== -1) throw new Error(`Ligne ${invalidRow + 2} : matricule et nom obligatoires`)
         result = await employeesApi.importAll(rows)
         loadData()
-        loadTampons()
       } else if (kind === 'supervisors') {
         const names = sourceRows.map(row => excelText(excelValue(row, ['Nom superviseur', 'Superviseur', 'Nom', 'Name'])))
         const invalidRow = names.findIndex(name => !name)
@@ -644,16 +457,6 @@ export default function Employees() {
         result = await lookupApi.importSupervisors(names)
         loadSupervisors()
         lookupApi.supervisorsList().then(d => setSupervisorList(Array.isArray(d) ? d : (d?.supervisors || [])))
-      } else if (kind === 'tampons') {
-        const rows = sourceRows.map(row => ({
-          code: excelText(excelValue(row, ['Code tampon', 'Code', 'TAMPON'])),
-          description: excelText(excelValue(row, ['Description'])),
-          mat: excelText(excelValue(row, ['Matricule', 'Matricule employé', 'MAT'])),
-        }))
-        const invalidRow = rows.findIndex(row => !row.code)
-        if (invalidRow !== -1) throw new Error(`Ligne ${invalidRow + 2} : code tampon obligatoire`)
-        result = await tamponsApi.importAll(rows)
-        loadTampons()
       } else {
         const rows = sourceRows.map(row => ({
           MATRICULE: excelText(excelValue(row, ['Matricule', 'MATRICULE'])),
@@ -690,7 +493,7 @@ export default function Employees() {
           <div className="header-accent-bar"></div>
           <div className="header-title-group">
             <h2>Gestion des Opérateurs</h2>
-            <span className="header-subtitle">Employés · Superviseurs · Tampons · Couturières</span>
+            <span className="header-subtitle">Employés · Superviseurs · Couturières</span>
           </div>
         </div>
         <div className="header-right">
@@ -712,11 +515,6 @@ export default function Employees() {
           <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Superviseurs
           <span className="badge-count">{supervisors.length}</span>
-        </button>
-        <button className={`emp-tab${tab === 'tampons' ? ' active' : ''}`} onClick={() => setTab('tampons')}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-          Tampons
-          <span className="badge-count">{tampons.length}</span>
         </button>
         <button className={`emp-tab${tab === 'couturieres' ? ' active' : ''}`} onClick={() => setTab('couturieres')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M8 12h8M12 8v8"/></svg>
@@ -812,7 +610,7 @@ export default function Employees() {
                   <thead>
                     <tr>
                       {selectionHeader}
-                      <th>#</th><th>Mat</th><th>Nom</th><th>Tampon(s)</th>
+                      <th>#</th><th>Mat</th><th>Nom</th><th>Tampon</th>
                       <th>Date Embauche</th><th>Fonction</th><th>Projet</th>
                       <th>Équipe</th><th>Superviseur</th><th>Actions</th>
                     </tr>
@@ -822,9 +620,6 @@ export default function Employees() {
                       <tr><td colSpan={canManageEmployees ? 11 : 10} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Aucun opérateur trouvé</td></tr>
                     )}
                     {records.map((emp, idx) => {
-                      // Find all tampons assigned to this employee
-                      const empTampons = tampons.filter(t => t.mat === emp.mat).map(t => t.code)
-                      const displayTampons = empTampons.length > 0 ? empTampons : (emp.tampon ? [emp.tampon] : [])
                       return (
                         <tr key={emp.mat}>
                           {selectionCell(emp)}
@@ -835,10 +630,9 @@ export default function Employees() {
                           <td>{emp.name}</td>
                           <td>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                              {displayTampons.map(t => (
-                                <code key={t} style={{ fontSize: 11, background: '#f0fdf4', color: '#15803d', border: '1px solid #c7d2fe', borderRadius: 4, padding: '1px 5px' }}>{t}</code>
-                              ))}
-                              {displayTampons.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>}
+                              {emp.tampon
+                                ? <code style={{ fontSize: 11, background: '#f0fdf4', color: '#15803d', border: '1px solid #c7d2fe', borderRadius: 4, padding: '1px 5px' }}>{emp.tampon}</code>
+                                : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>}
                             </div>
                           </td>
                           <td style={{ fontSize: 12 }}>{emp.dateEmbauche}</td>
@@ -941,86 +735,6 @@ export default function Employees() {
                           </tr>
                         )
                       })}
-                    </tbody>
-                  </table>
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ TAMPONS PANEL ══ */}
-      {tab === 'tampons' && (
-        <div className="emp-panel active">
-          <div className="table-container">
-            <div className="table-header">
-              <h3 className="table-title">Tampons <span className="badge-count" style={{ marginLeft: 8 }}>{tampons.length}</span></h3>
-              <div className="table-controls">
-                {selectionControls}
-                <button type="button" style={excelButtonStyle} onClick={handleExportTampons}>Export Excel</button>
-                {canManageEmployees && (
-                  <>
-                    <label style={excelImportStyle}>
-                      {importingTab === 'tampons' ? 'Import...' : 'Import Excel'}
-                      <input type="file" accept=".xlsx,.xls,.csv" hidden disabled={!!importingTab}
-                        onChange={e => handleImportExcel(e, 'tampons')} />
-                    </label>
-                    <button className="add-btn" onClick={openAddTampon}>
-                      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Nouveau Tampon
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            <div style={{ padding: '8px 16px 0' }}>
-              <div className="search-container" style={{ maxWidth: 360 }}>
-                <span className="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
-                <input type="text" className="search-input" placeholder="Rechercher un tampon…"
-                  value={tamponSearch} onChange={e => setTamponSearch(e.target.value)} />
-              </div>
-            </div>
-            <div className="table-wrapper">
-              {tamponsLoading ? <div className="loading"><div className="spinner" /></div> : (() => {
-                const filtered = filteredTampons
-                return (
-                  <table className="data-table">
-                    <thead>
-                      <tr>{selectionHeader}<th>#</th><th>Code Tampon</th><th>Description</th><th>Employé Assigné</th><th>Actions</th></tr>
-                    </thead>
-                    <tbody>
-                      {filtered.length === 0 && (
-                        <tr><td colSpan={canManageEmployees ? 6 : 5} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>{tampons.length === 0 ? 'Aucun tampon. Créez des tampons et assignez-les aux employés.' : 'Aucun résultat trouvé'}</td></tr>
-                      )}
-                      {filtered.map((t, idx) => (
-                        <tr key={t.id}>
-                          {selectionCell(t)}
-                          <td style={{ color: '#64748b', fontWeight: 600 }}>{idx + 1}</td>
-                          <td><code style={{ fontFamily: 'monospace', fontWeight: 700, color: '#15803d', fontSize: 13 }}>{t.code}</code></td>
-                          <td style={{ fontSize: 12 }}>{t.description || '—'}</td>
-                          <td>
-                            {t.employeeName
-                              ? <span style={{ fontSize: 12, fontWeight: 600 }}>{t.employeeName} <span style={{ color: '#94a3b8', fontWeight: 400 }}>({t.mat})</span></span>
-                              : <span style={{ fontSize: 11, color: '#94a3b8', background: '#f1f5f9', borderRadius: 4, padding: '2px 8px' }}>Non assigné</span>
-                            }
-                          </td>
-                          <td>
-                            {canManageEmployees && (
-                              <div style={{ display: 'flex', gap: 6 }}>
-                                <button className="btn-icon btn-edit" onClick={() => openEditTampon(t)}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                  Modifier
-                                </button>
-                                <button className="btn-icon btn-delete" onClick={() => handleDeleteTampon(t)} disabled={!!t.mat}>
-                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 13, height: 13 }}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-                                  Supprimer
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
                     </tbody>
                   </table>
                 )
@@ -1139,7 +853,6 @@ export default function Employees() {
             <p>Supprimer définitivement ces {selectedRows.length} élément(s) ? Cette action est irréversible.</p>
             {tab === 'employees' && <p>Les tampons affectés seront libérés, pas supprimés.</p>}
             {tab === 'supervisors' && <p>Le superviseur sera retiré des affectations actuelles des employés. Les historiques de contrôle sont conservés.</p>}
-            {tab === 'tampons' && <p>Seuls les tampons non affectés seront supprimés. Les tampons affectés seront conservés avec leurs affectations et listés dans le bilan.</p>}
             <ul>{selectedRows.slice(0, 20).map(row => <li key={operatorId(tab, row)}>{operatorName(tab, row)} ({operatorId(tab, row)})</li>)}</ul>
             {selectedRows.length > 20 && <p>Et {selectedRows.length - 20} autre(s) élément(s) sélectionné(s).</p>}
           </> : bulkModal === 'rename' ? <>
@@ -1148,7 +861,7 @@ export default function Employees() {
               const id = operatorId(tab, row)
               return (
                 <ModalField key={id} label={`${operatorName(tab, row)} (${id})`} required>
-                  <input className="form-input" aria-label={`Nouveau ${tab === 'tampons' ? 'code' : 'nom'} (${id})`}
+                  <input className="form-input" aria-label={`Nouveau nom (${id})`}
                     disabled={bulkSaving} value={bulkNames[id] ?? ''}
                     onChange={e => setBulkNames(current => ({ ...current, [id]: e.target.value }))} />
                 </ModalField>
@@ -1259,6 +972,10 @@ export default function Employees() {
             <ModalField label="Nom" required>
               <input type="text" className="form-input" {...f('name')} />
             </ModalField>
+            <ModalField label="Tampon" required>
+              <input type="text" className="form-input" placeholder="Ex: CQ108" maxLength={50}
+                value={form.tampon} onChange={e => setForm(p => ({ ...p, tampon: e.target.value.toUpperCase() }))} />
+            </ModalField>
             <ModalField label="Fonction" required>
               <select className="form-input" value={form.projet} onChange={e => setForm(p => ({ ...p, projet: e.target.value }))}>
                 {FONCTIONS.map(fn => <option key={fn}>{fn}</option>)}
@@ -1289,23 +1006,6 @@ export default function Employees() {
               <input type="date" className="form-input" {...f('dateEmbauche')} />
             </ModalField>
           </div>
-          {/* Tampon multi-select (full width) */}
-          <div style={{ marginTop: 12 }}>
-            <ModalField label="Tampons">
-              {modalTampons.length === 0 && selectedTampons.length === 0 ? (
-                <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>
-                  Aucun tampon disponible. Créez des tampons dans l'onglet "Tampons" d'abord.
-                </div>
-              ) : (
-                <TamponTagSelect
-                  allTampons={modalTampons}
-                  selectedCodes={selectedTampons}
-                  onChange={setSelectedTampons}
-                  employeeMat={form.mat}
-                />
-              )}
-            </ModalField>
-          </div>
         </Modal>
       )}
 
@@ -1324,24 +1024,6 @@ export default function Employees() {
         </Modal>
       )}
 
-      {/* ══ TAMPON MODAL ══ */}
-      {tamponModal && (
-        <Modal title={tamponModal === 'add' ? 'Nouveau Tampon' : 'Modifier Tampon'} onClose={() => setTamponModal(null)} maxWidth={400}
-          footer={<>
-            <ModalBtn variant="secondary" onClick={() => setTamponModal(null)}>Annuler</ModalBtn>
-            <ModalBtn onClick={handleSaveTampon} disabled={tamponSaving}>{tamponSaving ? 'Enregistrement...' : 'Enregistrer'}</ModalBtn>
-          </>}>
-          {tamponError && <div className="alert alert-error">{tamponError}</div>}
-          <ModalField label="Code Tampon" required>
-            <input type="text" className="form-input" placeholder="Ex: CQ108" value={tamponForm.code}
-              onChange={e => setTamponForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} />
-          </ModalField>
-          <ModalField label="Description">
-            <input type="text" className="form-input" placeholder="Description optionnelle" value={tamponForm.description}
-              onChange={e => setTamponForm(f => ({ ...f, description: e.target.value }))} />
-          </ModalField>
-        </Modal>
-      )}
     </>
   )
 }

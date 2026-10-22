@@ -3,6 +3,8 @@ import { buildQuery } from '../utils/helpers.js'
 
 export const projectsApi = {
   getProjects:   ()                 => http.get('/projects').then(unwrap),
+  getAllRefMessages:()               => http.get('/projects/metadata/messages').then(unwrap),
+  getAllRefCheckpoints:()            => http.get('/projects/metadata/checkpoints').then(unwrap),
   getRefs:       (name, p, l)       => http.get(`/projects/${name}/refs?page=${p}&limit=${l}`).then(unwrap),
   getLignesProjet:(name)            => http.get(`/projects/${name}/lignes-projet`).then(unwrap),
   create:        (name)             => http.post('/projects', { name }).then(unwrap),

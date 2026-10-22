@@ -34,6 +34,7 @@ public class DeliberaRepository {
         // Add CHECKPOINT column (checkpoint chosen at scan time, from REF_CHECKPOINTS)
         try { db.execute("ALTER TABLE SYSTEM.DELIBERA_RECORDS ADD CHECKPOINT VARCHAR2(500)"); }
         catch (Exception ignored) {}
+        ensureRecordCheckpointsTable();
         ensureHourlyTargetsTable();
         for (var column : Map.of("RETURN_JUSTIFICATION", "VARCHAR2(2000 CHAR)",
                 "RETURNED_BY", "VARCHAR2(100)", "RETURNED_AT", "TIMESTAMP").entrySet()) {
@@ -47,6 +48,34 @@ public class DeliberaRepository {
         // Composite index to speed up projet+ligne+date_scan filtering (comptage horaire, listing, KPIs)
         try { db.execute("CREATE INDEX SYSTEM.IDX_DELIBERA_PROJ_LIGNE_DT ON SYSTEM.DELIBERA_RECORDS (PROJET, LIGNE, CREATED_AT)"); }
         catch (Exception ignored) {}
+    }
+
+    private void ensureRecordCheckpointsTable() {
+        Integer count = db.queryForObject(
+                "SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER='SYSTEM' AND TABLE_NAME='DELIBERA_RECORD_CHECKPOINTS'",
+                Integer.class);
+        if (count == null) throw new IllegalStateException("Impossible de vérifier le schéma des checkpoints Délibéra");
+        if (count == 0) {
+            db.execute("""
+                CREATE TABLE SYSTEM.DELIBERA_RECORD_CHECKPOINTS (
+                    ID          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                    RECORD_ID   NUMBER NOT NULL,
+                    PROJECT_NAME VARCHAR2(50),
+                    LIGNE       VARCHAR2(26),
+                    PDEF        VARCHAR2(26),
+                    FAS         VARCHAR2(26),
+                    DESIGNATION VARCHAR2(128),
+                    VERSION     VARCHAR2(26),
+                    REF_DETAIL  VARCHAR2(26),
+                    CHECKPOINT  VARCHAR2(500) NOT NULL,
+                    STATUS      VARCHAR2(3) NOT NULL,
+                    CONSTRAINT CK_DELIBERA_CHECKPOINT_STATUS CHECK (STATUS IN ('OK','NOK')),
+                    CONSTRAINT UQ_DELIBERA_RECORD_CHECKPOINT UNIQUE (RECORD_ID, CHECKPOINT),
+                    CONSTRAINT FK_DELIBERA_RECORD_CHECKPOINT FOREIGN KEY (RECORD_ID)
+                        REFERENCES SYSTEM.DELIBERA_RECORDS(ID) ON DELETE CASCADE
+                )
+            """);
+        }
     }
 
     private void ensureHourlyTargetsTable() {
@@ -231,6 +260,26 @@ public class DeliberaRepository {
     public void updateRecordStatut(long recordId, String statut) {
         db.update("UPDATE SYSTEM.DELIBERA_RECORDS SET STATUT_REPRISE=?,UPDATED_AT=CURRENT_TIMESTAMP WHERE ID=?",
             statut, recordId);
+    }
+
+    @Transactional("oracleTransactionManager")
+    public void replaceRecordCheckpoints(long recordId, List<Map<String, String>> checkpoints) {
+        db.update("DELETE FROM SYSTEM.DELIBERA_RECORD_CHECKPOINTS WHERE RECORD_ID=?", recordId);
+        for (Map<String, String> checkpoint : checkpoints) {
+            db.update("INSERT INTO SYSTEM.DELIBERA_RECORD_CHECKPOINTS " +
+                            "(RECORD_ID,PROJECT_NAME,LIGNE,PDEF,FAS,DESIGNATION,VERSION,REF_DETAIL,CHECKPOINT,STATUS) " +
+                            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                    recordId, checkpoint.get("project"), checkpoint.get("ligne"), checkpoint.get("pdef"),
+                    checkpoint.get("fas"), checkpoint.get("designation"), checkpoint.get("version"),
+                    checkpoint.get("refDetail"), checkpoint.get("checkpoint"), checkpoint.get("status"));
+        }
+    }
+
+    public List<Map<String, Object>> findRecordCheckpoints(long recordId) {
+        return db.queryForList(
+                "SELECT PROJECT_NAME,LIGNE,PDEF,FAS,DESIGNATION,VERSION,REF_DETAIL,CHECKPOINT,STATUS " +
+                        "FROM SYSTEM.DELIBERA_RECORD_CHECKPOINTS WHERE RECORD_ID=? ORDER BY ID",
+                recordId);
     }
 
     @Transactional("oracleTransactionManager")

@@ -35,6 +35,8 @@ export const deliberaApi = {
     http.post('/delibera/records', body).then(unwrap),
   getRecord: (id) =>
     http.get(`/delibera/records/${id}`).then(unwrap),
+  setRecordCheckpoints: (id, checkpointResults) =>
+    http.put(`/delibera/records/${id}/checkpoints`, { checkpointResults }).then(unwrap),
   verifyRecord: (id, body) =>
     http.put(`/delibera/records/${id}/verify`, body).then(unwrap),
   returnToOk: (id, body) =>

@@ -9,6 +9,7 @@ import com.adient.firewall.repository.QualityRepository;
 import com.adient.firewall.repository.TargetRepository;
 import com.adient.firewall.repository.sqlserver.ErpProductionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 
 @Service
+@ConditionalOnExpression("!'${spring.datasource.sqlserver.url:}'.isBlank()")
 @RequiredArgsConstructor
 public class ErpProductionService {
 
