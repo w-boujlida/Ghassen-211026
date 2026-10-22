@@ -7,7 +7,6 @@ import com.adient.firewall.dto.UserDto;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -1626,14 +1625,9 @@ public class QualityRepository {
     }
 
     public List<String> getRefVerifMessages(String project, String pdef) {
-        try {
-            return db.queryForList(
+        return db.queryForList(
                 "SELECT MESSAGE FROM SYSTEM.REF_VERIF_MESSAGES WHERE PROJECT_NAME=? AND PDEF=? AND MESSAGE IS NOT NULL ORDER BY DISPLAY_ORDER,ID",
                 String.class, project.toUpperCase(), pdef);
-        } catch (Exception e) {
-            log.warn("getRefVerifMessages failed: {}", e.getMessage());
-            return Collections.emptyList();
-        }
     }
 
     public List<Map<String, Object>> getAllRefVerifMessages() {
@@ -1656,17 +1650,9 @@ public class QualityRepository {
     }
 
     private void insertVerifMessage(String project, String pdef, String message, int order) {
-        try {
-            db.update("INSERT INTO SYSTEM.REF_VERIF_MESSAGES (ID,PROJECT_NAME,PDEF,MESSAGE,DISPLAY_ORDER) " +
+        db.update("INSERT INTO SYSTEM.REF_VERIF_MESSAGES (ID,PROJECT_NAME,PDEF,MESSAGE,DISPLAY_ORDER) " +
                 "VALUES (ref_verif_msg_seq.NEXTVAL,?,?,?,?)",
                 project, pdef, message, order);
-        } catch (DataIntegrityViolationException e) {
-            // ref_verif_msg_seq is behind MAX(ID) (e.g. rows imported since startup) — resync once and retry.
-            resyncVerifMsgSequence();
-            db.update("INSERT INTO SYSTEM.REF_VERIF_MESSAGES (ID,PROJECT_NAME,PDEF,MESSAGE,DISPLAY_ORDER) " +
-                "VALUES (ref_verif_msg_seq.NEXTVAL,?,?,?,?)",
-                project, pdef, message, order);
-        }
     }
 
     // ─── Checkpoints (1 Ref → N Checkpoints) ──────────────────────────────────
@@ -1733,14 +1719,9 @@ public class QualityRepository {
     }
 
     public List<String> getRefCheckpoints(String project, String pdef) {
-        try {
-            return db.queryForList(
+        return db.queryForList(
                 "SELECT CHECKPOINT FROM SYSTEM.REF_CHECKPOINTS WHERE PROJECT_NAME=? AND PDEF=? AND CHECKPOINT IS NOT NULL ORDER BY DISPLAY_ORDER,ID",
                 String.class, project.toUpperCase(), pdef);
-        } catch (Exception e) {
-            log.warn("getRefCheckpoints failed: {}", e.getMessage());
-            return Collections.emptyList();
-        }
     }
 
     public List<Map<String, Object>> getAllRefCheckpoints() {

@@ -53,4 +53,34 @@ class ProjectServiceImplTest {
         assertEquals(messages, service.getAllRefVerifMessages());
         assertEquals(checkpoints, service.getAllRefCheckpoints());
     }
+
+    @Test
+    void normalizesMetadataAndRemovesDuplicateCheckpointsInOrder() {
+        service.setRefVerifMessages("audi", " P/1 ", List.of(" Message ", "", "Message", "Second"));
+        service.setRefCheckpoints("audi", " P/1 ", List.of(" Couture ", "Couture", "Etiquette"));
+
+        verify(repo).setRefVerifMessages("AUDI", "P/1", List.of("Message", "Second"));
+        verify(repo).setRefCheckpoints("AUDI", "P/1", List.of("Couture", "Etiquette"));
+    }
+
+    @Test
+    void rejectsInvalidMetadataBeforeDeletingExistingRows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.setRefVerifMessages("AUDI", "P1", List.of("X".repeat(501))));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.setRefCheckpoints("AUDI", "P1", List.of("X".repeat(501))));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.setRefCheckpoints("AUDI", " ", List.of("Check")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.setRefVerifMessages("AUDI", "P1", null));
+        verifyNoInteractions(repo);
+    }
+
+    @Test
+    void permitsExplicitlyClearingMetadata() {
+        service.setRefVerifMessages("AUDI", "P1", List.of());
+        service.setRefCheckpoints("AUDI", "P1", List.of());
+        verify(repo).setRefVerifMessages("AUDI", "P1", List.of());
+        verify(repo).setRefCheckpoints("AUDI", "P1", List.of());
+    }
 }

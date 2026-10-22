@@ -295,7 +295,7 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     public List<String> getRefVerifMessages(String project, String pdef) {
         String pn = QualityRepository.safe(project);
-        return repo.getRefVerifMessages(pn, pdef);
+        return repo.getRefVerifMessages(pn, metadataPdef(pdef));
     }
 
     @Override
@@ -304,16 +304,16 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public void setRefVerifMessages(String project, String pdef, List<String> messages) {
         String pn = QualityRepository.safe(project);
-        repo.setRefVerifMessages(pn, pdef, messages);
+        repo.setRefVerifMessages(pn, metadataPdef(pdef), metadataValues(messages));
     }
 
     @Override
     public List<String> getRefCheckpoints(String project, String pdef) {
         String pn = QualityRepository.safe(project);
-        return repo.getRefCheckpoints(pn, pdef);
+        return repo.getRefCheckpoints(pn, metadataPdef(pdef));
     }
 
     @Override
@@ -322,10 +322,31 @@ public class ProjectServiceImpl implements IProjectService {
     }
 
     @Override
-    @Transactional
+    @Transactional("oracleTransactionManager")
     public void setRefCheckpoints(String project, String pdef, List<String> checkpoints) {
         String pn = QualityRepository.safe(project);
-        repo.setRefCheckpoints(pn, pdef, checkpoints);
+        repo.setRefCheckpoints(pn, metadataPdef(pdef), metadataValues(checkpoints));
+    }
+
+    private String metadataPdef(String pdef) {
+        if (pdef == null || pdef.isBlank() || pdef.trim().length() > 26) {
+            throw new IllegalArgumentException("PDEF obligatoire (26 caractères maximum)");
+        }
+        return pdef.trim();
+    }
+
+    private List<String> metadataValues(List<String> values) {
+        if (values == null) throw new IllegalArgumentException("Liste de messages ou checkpoints obligatoire");
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String value : values) {
+            if (value == null || value.isBlank()) continue;
+            String text = value.trim();
+            if (text.length() > 500) {
+                throw new IllegalArgumentException("Chaque message ou checkpoint est limité à 500 caractères");
+            }
+            normalized.add(text);
+        }
+        return new ArrayList<>(normalized);
     }
 
     @Override

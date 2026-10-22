@@ -88,6 +88,8 @@ export default function Projects() {
   // ── Checkpoints state ──
   const [refCheckpoints, setRefCheckpoints]               = useState([])
   const [refCheckpointsLoading, setRefCheckpointsLoading] = useState(false)
+  const [refMetadataError, setRefMetadataError] = useState('')
+  const refMetadataVersion = useRef(0)
 
   // ── Export refs state ──
   const [exportingRefs, setExportingRefs] = useState(false)
@@ -262,16 +264,18 @@ export default function Projects() {
             : (await projectsApi.getRefCheckpoints(group.project, group.pdef))?.checkpoints || []
           const merged = [...existing]
           const known = new Set(existing.map(value => String(value).trim()))
+          let groupAdded = 0
           for (const value of group.values) {
             if (!known.has(value)) {
               merged.push(value)
               known.add(value)
-              added++
+              groupAdded++
             }
           }
           if (merged.length !== existing.length) {
             if (type === 'messages') await projectsApi.setRefMessages(group.project, group.pdef, merged)
             else await projectsApi.setRefCheckpoints(group.project, group.pdef, merged)
+            added += groupAdded
           }
         } catch (error) {
           errors.push(`${group.project} / ${group.pdef} : ${apiErr(error)}`)
@@ -472,12 +476,18 @@ export default function Projects() {
 
   // ── Ref CRUD ──
   const openAddRef = () => {
+    refMetadataVersion.current++
+    setRefMetadataError('')
+    setRefMessagesLoading(false)
+    setRefCheckpointsLoading(false)
     setRefForm(EMPTY_REF); setFormError(''); setEditingRef(null); setRefSubModal('add')
     setRefMessages([])
     setRefCheckpoints([])
   }
 
   const openEditRef = (ref) => {
+    const version = ++refMetadataVersion.current
+    setRefMetadataError('')
     setRefForm({
       pdef: String(ref.PDEF ?? ''),
       fas: ref.FAS_ADIENT_PART_NUMBER || '',
@@ -492,19 +502,20 @@ export default function Projects() {
     setRefMessages([])
     setRefMessagesLoading(true)
     projectsApi.getRefMessages(refsProject, ref.PDEF)
-      .then(d => setRefMessages(d?.messages || []))
-      .catch(() => setRefMessages([]))
-      .finally(() => setRefMessagesLoading(false))
+      .then(d => { if (version === refMetadataVersion.current) setRefMessages(d?.messages || []) })
+      .catch(e => { if (version === refMetadataVersion.current) setRefMetadataError('Chargement des messages impossible : ' + apiErr(e)) })
+      .finally(() => { if (version === refMetadataVersion.current) setRefMessagesLoading(false) })
     setRefCheckpoints([])
     setRefCheckpointsLoading(true)
     projectsApi.getRefCheckpoints(refsProject, ref.PDEF)
-      .then(d => setRefCheckpoints(d?.checkpoints || []))
-      .catch(() => setRefCheckpoints([]))
-      .finally(() => setRefCheckpointsLoading(false))
+      .then(d => { if (version === refMetadataVersion.current) setRefCheckpoints(d?.checkpoints || []) })
+      .catch(e => { if (version === refMetadataVersion.current) setRefMetadataError('Chargement des checkpoints impossible : ' + apiErr(e)) })
+      .finally(() => { if (version === refMetadataVersion.current) setRefCheckpointsLoading(false) })
   }
 
   const handleSaveRef = async () => {
     if (refsSavingRef.current) return
+    if (refMessagesLoading || refCheckpointsLoading || refMetadataError) return
     const pdef = String(refForm.pdef ?? '').trim()
     if (!pdef) { setFormError('PDEF est obligatoire'); return }
     refsSavingRef.current = true
@@ -1413,7 +1424,7 @@ export default function Projects() {
           footer={
             <>
               <ModalBtn variant="secondary" onClick={() => setRefSubModal(null)} disabled={saving}>Annuler</ModalBtn>
-              <ModalBtn onClick={handleSaveRef} disabled={saving}>{saving ? 'Enregistrement...' : 'Enregistrer'}</ModalBtn>
+              <ModalBtn onClick={handleSaveRef} disabled={saving || refMessagesLoading || refCheckpointsLoading || !!refMetadataError}>{saving ? 'Enregistrement...' : 'Enregistrer'}</ModalBtn>
             </>
           }
         >
@@ -1437,6 +1448,7 @@ export default function Projects() {
             <input className="form-input" placeholder="Ex: L1, L2..." {...rf('ligne')} />
           </ModalField>
           <ModalField label="Messages de Vérification">
+            {refMetadataError && <div className="alert alert-error" role="alert">{refMetadataError} Fermez puis rouvrez la référence pour réessayer.</div>}
             {refMessagesLoading ? (
               <div style={{ color: '#94a3b8', fontSize: 12, padding: '6px 0' }}>Chargement...</div>
             ) : (

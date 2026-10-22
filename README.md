@@ -56,3 +56,16 @@ These commits save code history on the same disk, not an independent backup.
 Ignored files (including `.env`, Oracle data, dependencies, and build outputs)
 are excluded. Keep secrets out of source files and maintain separate database
 and off-machine backups.
+
+## Reference messages and checkpoints
+
+Messages and checkpoints are scoped to the project and PDEF (including PDEFs
+containing `/`). Messages provide operator instructions in Firewall's OK-piece
+verification; checkpoints populate reference-specific choices in Firewall/CSL
+and per-point OK/NOK reviews in Delibera.
+
+Lists preserve order, ignore blank entries, remove identical duplicates, and
+accept up to 500 characters per entry. Replacing each list is transactional:
+failed writes preserve its previous contents. If a reference's metadata cannot
+be loaded, editing cannot be saved until the reference is reopened successfully,
+preventing accidental erasure of existing messages or checkpoints.
