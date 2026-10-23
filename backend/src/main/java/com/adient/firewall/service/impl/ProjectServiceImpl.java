@@ -20,13 +20,14 @@ public class ProjectServiceImpl implements IProjectService {
     /** System projects that cannot be renamed or deleted by anyone. */
     private static final Set<String> LOCKED_PROJECTS = Set.of("P6", "P7", "P674", "CR3", "J4U", "AUDI", "SK316_7");
     private static final Set<String> RESERVED_PROJECT_NAMES =
-            Set.of("DEF", "POLY", "APP_USERS", "SUPERVISORS", "REF_VERIF_MESSAGES", "REF_CHECKPOINTS");
+            Set.of("DEF", "POLY", "APP_USERS", "SUPERVISORS", "REF_VERIF_MESSAGES", "REF_CHECKPOINTS", "PROJECT_SCAN_SETTINGS", "PROJECT_VERSION_PHOTOS", "DELIBERA_SCAN_RULES", "VERSION_SCAN_SETTINGS", "REF_SCAN_SETTINGS");
 
     @Override
     public List<Map<String, Object>> getProjects() {
         List<String> names = repo.getProjectNames();
         List<Map<String, Object>> result = new ArrayList<>();
         for (String name : names) {
+            Integer barcodeLength = repo.getBarcodeLength(name);
             try {
                 int cnt = repo.countProjectRefs(name);
                 Map<String, Object> p = new LinkedHashMap<>();
@@ -35,6 +36,7 @@ public class ProjectServiceImpl implements IProjectService {
                 p.put("has_firewall", repo.tableExists("FIREWALL_" + name));
                 p.put("has_csl",      repo.tableExists("CSL_" + name));
                 p.put("locked",       LOCKED_PROJECTS.contains(name));
+                p.put("barcode_length", barcodeLength);
                 result.add(p);
             } catch (Exception e) {
                 log.warn("Failed to get info for project {}: {}", name, e.getMessage());
@@ -46,6 +48,75 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     @Transactional
     public void createProject(String name) {
+        createProject(name, null);
+    }
+
+    @Override
+    public void setBarcodeLength(String name, Integer barcodeLength) {
+        repo.setBarcodeLength(name, barcodeLength);
+    }
+
+    @Override
+    public List<com.adient.firewall.dto.ScanRule> getDeliberaScanRules(String name) {
+        return repo.getDeliberaScanRules(name);
+    }
+
+    @Override
+    @Transactional("oracleTransactionManager")
+    public void setDeliberaScanRules(String name, List<com.adient.firewall.dto.ScanRule> rules) {
+        repo.setDeliberaScanRules(name, rules);
+    }
+
+    @Override
+    @Transactional("oracleTransactionManager")
+    public void setScanSettings(String name, Integer length, List<com.adient.firewall.dto.ScanRule> rules) {
+        QualityRepository.checkBarcodeLengthSetting(length);
+        QualityRepository.checkScanRules(rules);
+        repo.setBarcodeLength(name, length);
+        repo.setDeliberaScanRules(name, rules);
+    }
+
+    @Override
+    public Map<String, Object> getVersionScanSettings(String name, String version) {
+        return repo.getVersionScanSettings(name, version);
+    }
+
+    @Override
+    @Transactional("oracleTransactionManager")
+    public void setVersionScanSettings(String name, String version, Integer length, List<com.adient.firewall.dto.ScanRule> rules) {
+        repo.setVersionScanSettings(name, version, length, rules);
+    }
+
+    @Override
+    public Map<String, Object> getReferenceScanSettings(String name, String pdef, String version) {
+        return repo.getReferenceScanSettings(name, pdef, version);
+    }
+
+    @Override
+    @Transactional("oracleTransactionManager")
+    public void setReferenceScanSettings(String name, String pdef, String version, Integer length, List<com.adient.firewall.dto.ScanRule> rules) {
+        repo.setReferenceScanSettings(name, pdef, version, length, rules);
+    }
+
+    @Override
+    @Transactional("oracleTransactionManager")
+    public void createProject(String name, Integer length, List<com.adient.firewall.dto.ScanRule> rules) {
+        if (rules != null) QualityRepository.checkScanRules(rules);
+        createProject(name, length);
+        if (rules != null) {
+            try {
+                repo.setDeliberaScanRules(name, rules);
+            } catch (org.springframework.dao.DataAccessException e) {
+                String pn = QualityRepository.safe(name.trim());
+                cleanupProject(pn, pn.toLowerCase());
+                throw e;
+            }
+        }
+    }
+
+    @Override
+    public void createProject(String name, Integer barcodeLength) {
+        QualityRepository.checkBarcodeLengthSetting(barcodeLength);
         if (name == null || name.isBlank())
             throw new IllegalArgumentException("Project name is required");
         String pn = QualityRepository.safe(name.trim());
@@ -83,6 +154,14 @@ public class ProjectServiceImpl implements IProjectService {
             } catch (Exception e) {
                 cleanupProject(pn, pl);
                 throw new RuntimeException("Failed to create project: " + e.getMessage(), e);
+            }
+        }
+        if (barcodeLength != null) {
+            try {
+                repo.setBarcodeLength(pn, barcodeLength);
+            } catch (org.springframework.dao.DataAccessException e) {
+                cleanupProject(pn, pl);
+                throw e;
             }
         }
     }
@@ -192,6 +271,11 @@ public class ProjectServiceImpl implements IProjectService {
                     "BEFORE INSERT ON \"CSL_" + nn + "\" FOR EACH ROW WHEN (NEW.ID IS NULL) " +
                     "BEGIN SELECT csl_" + nl + "_seq.NEXTVAL INTO :NEW.ID FROM dual; END;");
         }
+        db.update("UPDATE SYSTEM.PROJECT_SCAN_SETTINGS SET PROJECT_NAME=? WHERE PROJECT_NAME=?", nn, on);
+        db.update("UPDATE SYSTEM.PROJECT_VERSION_PHOTOS SET PROJECT_NAME=? WHERE PROJECT_NAME=?", nn, on);
+        db.update("UPDATE SYSTEM.DELIBERA_SCAN_RULES SET PROJECT_NAME=? WHERE PROJECT_NAME=?", nn, on);
+        db.update("UPDATE SYSTEM.VERSION_SCAN_SETTINGS SET PROJECT_NAME=? WHERE PROJECT_NAME=?", nn, on);
+        db.update("UPDATE SYSTEM.REF_SCAN_SETTINGS SET PROJECT_NAME=? WHERE PROJECT_NAME=?", nn, on);
     }
 
     @Override
@@ -212,6 +296,11 @@ public class ProjectServiceImpl implements IProjectService {
             if (cnt != null && cnt > 0) throw new IllegalStateException("Cannot delete: " + cnt + " record(s) in CSL table.");
         }
         cleanupProject(pn, pn.toLowerCase());
+        db.update("DELETE FROM SYSTEM.PROJECT_SCAN_SETTINGS WHERE PROJECT_NAME=?", pn);
+        db.update("DELETE FROM SYSTEM.PROJECT_VERSION_PHOTOS WHERE PROJECT_NAME=?", pn);
+        db.update("DELETE FROM SYSTEM.DELIBERA_SCAN_RULES WHERE PROJECT_NAME=?", pn);
+        db.update("DELETE FROM SYSTEM.VERSION_SCAN_SETTINGS WHERE PROJECT_NAME=?", pn);
+        db.update("DELETE FROM SYSTEM.REF_SCAN_SETTINGS WHERE PROJECT_NAME=?", pn);
     }
 
     // ─── Private ──────────────────────────────────────────────────────────────

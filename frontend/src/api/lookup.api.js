@@ -1,7 +1,9 @@
 import http, { unwrap } from '../utils/api.js'
+import { checkedBarcodeLookup } from '../utils/barcode.js'
 
 export const lookupApi = {
-  barcode:         (barcode)        => http.get(`/common/lookup-barcode?barcode=${encodeURIComponent(barcode)}`).then(unwrap),
+  barcode:         (barcode, project) => checkedBarcodeLookup(barcode,
+    code => http.get('/common/lookup-barcode', { params: { barcode: code, project } }).then(unwrap)),
   poly:            (cqDelibera)     => http.get(`/common/lookup-poly?cqDelibera=${encodeURIComponent(cqDelibera)}`).then(unwrap),
   def:             (codeDef)        => http.get(`/common/lookup-def?codeDef=${encodeURIComponent(codeDef)}`).then(unwrap),
   tampons:         ()               => http.get('/common/poly-tampons').then(unwrap),

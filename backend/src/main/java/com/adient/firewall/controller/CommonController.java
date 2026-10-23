@@ -24,9 +24,9 @@ public class CommonController {
 
     @GetMapping("/lookup-barcode")
     public ResponseEntity<ApiResponse<Map<String, Object>>> lookupBarcode(
-            @RequestParam String barcode) {
+            @RequestParam String barcode, @RequestParam(required = false) String project) {
 
-        return ResponseEntity.ok(ApiResponse.ok(svc.lookupBarcode(barcode)));
+        return ResponseEntity.ok(ApiResponse.ok(svc.lookupBarcode(barcode, project)));
     }
 
     // ─── Poly lookup (by CQ delibera / tampon) ────────────────────────────────

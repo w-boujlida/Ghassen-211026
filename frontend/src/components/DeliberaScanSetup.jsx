@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { projectsApi } from '../api/projects.api.js'
+import VersionPhoto from './VersionPhoto.jsx'
 
 const text = value => String(value ?? '').trim()
 
@@ -125,6 +126,7 @@ export default function DeliberaScanSetup({ current, onConfirm, onClose }) {
           {valid && <p className="delibera-setup__recap">
             {projet} / {ligne || 'Sans ligne'} / {version || 'Sans version'}
           </p>}
+          {valid && <VersionPhoto project={projet} line={ligne} version={version} />}
         </div>
         <footer>
           <button type="button" onClick={onClose}>Annuler</button>

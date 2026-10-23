@@ -1,0 +1,11 @@
+.delibera-multi-scanner { display: grid; gap: 16px; width: 100%; min-width: 0; }
+.delibera-scan-field { display: grid; gap: 7px; }
+.delibera-scan-field label { font-size: 14px; font-weight: 700; color: #334155; }
+.delibera-scan-field label span { color: #15803d; }
+.delibera-scan-field small { color: #64748b; overflow-wrap: anywhere; }
+.delibera-scan-field.is-confirmed input { border-color: #15803d; }
+.delibera-multi-scanner .delibera-fast-scan__input-wrap { display: flex; gap: 8px; }
+.delibera-multi-scanner .delibera-fast-scan__input-wrap input { min-width: 0; flex: 1; padding-right: 16px; }
+.delibera-multi-scanner button { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 8px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+.delibera-multi-scanner button:disabled { opacity: .5; cursor: not-allowed; }
+.delibera-multi-scanner > p { font-size: 13px; color: #64748b; }

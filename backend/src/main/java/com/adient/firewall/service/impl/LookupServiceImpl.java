@@ -16,39 +16,15 @@ public class LookupServiceImpl implements ILookupService {
 
     @Override
     public Map<String, Object> lookupBarcode(String barcode) {
-        List<String> projects = repo.getProjectNames();
+        return lookupBarcode(barcode, null);
+    }
 
-        // 1. Try full barcode (LIKE match or exact FAS)
-        Optional<Map<String, Object>> hit = repo.lookupBarcode(projects, barcode);
+    @Override
+    public Map<String, Object> lookupBarcode(String barcode, String project) {
+        List<String> projects = project == null || project.isBlank()
+                ? repo.getProjectNames() : List.of(QualityRepository.safe(project));
 
-        // 2. Try substrings from start (length 8 to 15)
-        if (hit.isEmpty()) {
-            for (int len = 8; len <= Math.min(barcode.length(), 15); len++) {
-                String sub = barcode.substring(0, len);
-                hit = repo.lookupBarcode(projects, sub);
-                if (hit.isPresent()) break;
-            }
-        }
-
-        // 3. Try extracting only digits from barcode and matching prefixes
-        if (hit.isEmpty()) {
-            String digitsOnly = barcode.replaceAll("[^0-9]", "");
-            for (int len : new int[]{12, 11, 10, 9, 8}) {
-                if (digitsOnly.length() < len) continue;
-                hit = repo.lookupBarcode(projects, digitsOnly.substring(0, len));
-                if (hit.isPresent()) break;
-            }
-        }
-
-        // 4. Legacy prefix extraction (12, 10, 14 chars) for backward compat
-        if (hit.isEmpty()) {
-            for (int len : new int[]{12, 10, 14}) {
-                if (barcode.length() < len) continue;
-                String pdef = barcode.substring(0, len);
-                hit = repo.lookupBarcode(projects, pdef);
-                if (hit.isPresent()) break;
-            }
-        }
+        Optional<Map<String, Object>> hit = repo.lookupScanBarcode(projects, barcode);
 
         return hit.map(row -> {
             String pdef        = str(row.get("PDEF"));
@@ -65,7 +41,8 @@ public class LookupServiceImpl implements ILookupService {
             result.put("tableName",   tableName);
             result.put("designation", designation);
             return result;
-        }).orElseThrow(() -> new NoSuchElementException("No matching product for barcode: " + barcode));
+        }).orElseThrow(() -> new IllegalArgumentException(
+                "Code-barres erroné : aucune référence reconnue dans ce code. Vérifiez l'étiquette et le projet."));
     }
 
     @Override

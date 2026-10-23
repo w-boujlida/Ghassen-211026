@@ -8,6 +8,7 @@ import com.adient.firewall.security.PermissionInterceptor;
 import com.adient.firewall.service.impl.PermissionService;
 import com.adient.firewall.service.interfaces.IDefautCouturiereService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.HashMap;
@@ -26,8 +27,21 @@ class DeliberaScanTypeTest {
     private final DeliberaController controller = new DeliberaController(
             repo, quality, mock(IDefautCouturiereService.class));
 
+    @BeforeEach
+    void defaultRules() {
+        when(quality.getDeliberaScanRules(anyString())).thenReturn(java.util.List.of(
+                new com.adient.firewall.dto.ScanRule(null, "", "")));
+        when(quality.getDeliberaScanRules(anyString(), anyString())).thenReturn(java.util.List.of(
+                new com.adient.firewall.dto.ScanRule(null, "", "")));
+        when(quality.getDeliberaScanRules(anyString(), anyString(), anyString())).thenReturn(java.util.List.of(
+                new com.adient.firewall.dto.ScanRule(null, "", "")));
+    }
+
     @Test
-    void openNokRecordIncludesItsRecordedLineWithoutReferenceLookup() throws Exception {
+    void openNokRecordPreservesRecordedLineAndLoadsExactReference() throws Exception {
+        when(quality.getProjectNames()).thenReturn(java.util.List.of("P6"));
+        when(quality.lookupScanBarcode(java.util.List.of("P6"), "PIECE", false, "V1")).thenReturn(Optional.of(
+                Map.of("PDEF", "P1", "DESIGNATION", "Test", "LIGNE", "OTHER")));
         when(repo.findActiveRecordByBarcode("PIECE")).thenReturn(Optional.of(
                 Map.of("ID", 1, "PROJET", "P6", "REFERENCE", "REF1", "VERSION", "V1", "LIGNE", "L2")));
         MockMvcBuilders.standaloneSetup(controller).build()
@@ -35,12 +49,15 @@ class DeliberaScanTypeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hasOpenRecord").value(true))
                 .andExpect(jsonPath("$.data.ligne").value("L2"))
+                .andExpect(jsonPath("$.data.pdef").value("P1"))
                 .andExpect(jsonPath("$.data.recordId").value(1));
-        verifyNoInteractions(quality);
+        verify(quality).lookupScanBarcode(java.util.List.of("P6"), "PIECE", false, "V1");
     }
 
     @Test
     void openRecordWithoutLineExplicitlyReturnsNullLine() throws Exception {
+        when(quality.lookupScanBarcode(java.util.List.of("P6"), "PIECE", false, "V1"))
+                .thenReturn(Optional.of(Map.of("PDEF", "PIECE")));
         Map<String, Object> record = new HashMap<>(Map.of(
                 "ID", 1, "PROJET", "P6", "REFERENCE", "REF1", "VERSION", "V1"));
         record.put("LIGNE", null);
@@ -49,18 +66,75 @@ class DeliberaScanTypeTest {
                 .perform(get("/api/delibera/barcode/PIECE"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("\"ligne\":null")));
-        verifyNoInteractions(quality);
+        verify(quality).lookupScanBarcode(java.util.List.of("P6"), "PIECE", false, "V1");
     }
 
     @Test
-    void returnedPieceStillBlocksRescanWithoutReferenceLookup() throws Exception {
+    void unknownBarcodeReturnsExplicitErrorWithoutCreatingRecord() throws Exception {
+        when(quality.getProjectNames()).thenReturn(java.util.List.of("P6"));
+        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build()
+                .perform(get("/api/delibera/barcode/TRUNCATED"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.startsWith("Code-barres erroné")));
+        verify(quality).lookupScanBarcode(java.util.List.of("P6"), "TRUNCATED", false);
+        verify(repo, never()).insertRecord(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void exactFasBarcodeLoadsItsReference() throws Exception {
+        when(quality.getProjectNames()).thenReturn(java.util.List.of("P6"));
+        when(quality.lookupScanBarcode(java.util.List.of("P6"), "FAS1234567", false)).thenReturn(Optional.of(
+                Map.of("PDEF", "PDEF12345678", "TABLE_NAME", "P6", "LIGNE", "L1")));
+        MockMvcBuilders.standaloneSetup(controller).build()
+                .perform(get("/api/delibera/barcode/FAS1234567"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.found").value(true))
+                .andExpect(jsonPath("$.data.pdef").value("PDEF12345678"));
+    }
+
+    @Test
+    void queryRouteAcceptsReferenceWithSlash() throws Exception {
+        when(quality.getProjectNames()).thenReturn(java.util.List.of("AUDI"));
+        when(quality.lookupScanBarcode(java.util.List.of("AUDI"), "P/1234567890", false)).thenReturn(Optional.of(
+                Map.of("PDEF", "P/1234567890", "TABLE_NAME", "AUDI")));
+        MockMvcBuilders.standaloneSetup(controller).build()
+                .perform(get("/api/delibera/barcode").param("code", "P/1234567890"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pdef").value("P/1234567890"));
+    }
+
+    @Test
+    void createRecordCannotBypassExactBarcodeValidation() throws Exception {
+        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build()
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/delibera/records")
+                        .contentType("application/json").content("{\"barcode\":\"TRUNCATED\",\"projet\":\"P6\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.startsWith("Code-barres erroné")));
+        verify(repo, never()).insertRecord(anyString(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void returnedPieceStillBlocksRescan() throws Exception {
         when(repo.findActiveRecordByBarcode("PIECE")).thenReturn(Optional.empty());
         when(repo.hasReturnedRecord("PIECE")).thenReturn(true);
         MockMvcBuilders.standaloneSetup(controller).build()
                 .perform(get("/api/delibera/barcode/PIECE"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.wasReturnedBefore").value(true));
-        verifyNoInteractions(quality);
+        verify(quality, never()).lookupScanBarcode(anyList(), anyString(), anyBoolean());
+    }
+
+    @Test
+    void incompleteCodeCannotPassThroughAnExistingHistoricalRecord() throws Exception {
+        when(repo.findActiveRecordByBarcode("123")).thenReturn(Optional.of(
+                Map.of("ID", 1, "PROJET", "P6")));
+        when(quality.getDeliberaScanRules("P6", "")).thenReturn(java.util.List.of(
+                new com.adient.firewall.dto.ScanRule(26, "", "")));
+        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build()
+                .perform(get("/api/delibera/barcode").param("code", "123"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.startsWith("Code-barres erroné")));
+        verify(repo, never()).hasReturnedRecord(anyString());
     }
 
     @Test void returnEndpointPassesEvidenceAndSurfacesValidationErrors() throws Exception {

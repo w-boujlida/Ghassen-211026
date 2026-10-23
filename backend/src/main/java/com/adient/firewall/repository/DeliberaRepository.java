@@ -36,6 +36,8 @@ public class DeliberaRepository {
         catch (Exception ignored) {}
         ensureRecordCheckpointsTable();
         ensureHourlyTargetsTable();
+        ensureScanCodeColumns();
+        ensureRecordPostesTable();
         for (var column : Map.of("RETURN_JUSTIFICATION", "VARCHAR2(2000 CHAR)",
                 "RETURNED_BY", "VARCHAR2(100)", "RETURNED_AT", "TIMESTAMP").entrySet()) {
             Integer count = db.queryForObject(
@@ -48,6 +50,46 @@ public class DeliberaRepository {
         // Composite index to speed up projet+ligne+date_scan filtering (comptage horaire, listing, KPIs)
         try { db.execute("CREATE INDEX SYSTEM.IDX_DELIBERA_PROJ_LIGNE_DT ON SYSTEM.DELIBERA_RECORDS (PROJET, LIGNE, CREATED_AT)"); }
         catch (Exception ignored) {}
+    }
+
+    public void ensureRecordPostesTable() {
+        Integer count = db.queryForObject(
+                "SELECT COUNT(*) FROM ALL_TABLES WHERE OWNER='SYSTEM' AND TABLE_NAME='DELIBERA_RECORD_POSTES'",
+                Integer.class);
+        if (count == null) throw new IllegalStateException("Impossible de vérifier les postes Délibéra");
+        if (count == 0) db.execute("""
+                CREATE TABLE SYSTEM.DELIBERA_RECORD_POSTES (
+                    RECORD_ID NUMBER NOT NULL REFERENCES SYSTEM.DELIBERA_RECORDS(ID) ON DELETE CASCADE,
+                    POSTE_ID NUMBER NOT NULL REFERENCES SYSTEM.POSTES(ID),
+                    PRIMARY KEY (RECORD_ID, POSTE_ID)
+                )
+                """);
+    }
+
+    public void saveRecordPostes(long recordId, List<Long> posteIds) {
+        db.update("DELETE FROM SYSTEM.DELIBERA_RECORD_POSTES WHERE RECORD_ID=?", recordId);
+        for (Long posteId : posteIds) {
+            db.update("INSERT INTO SYSTEM.DELIBERA_RECORD_POSTES (RECORD_ID,POSTE_ID) VALUES (?,?)", recordId, posteId);
+        }
+    }
+
+    public List<Map<String, Object>> findRecordPostes(long recordId) {
+        return db.queryForList("""
+                SELECT p.ID,p.NOM FROM SYSTEM.POSTES p
+                WHERE p.ID IN (SELECT POSTE_ID FROM SYSTEM.DELIBERA_RECORD_POSTES WHERE RECORD_ID=?
+                    UNION SELECT POSTE_ID FROM SYSTEM.DELIBERA_RECORDS WHERE ID=?)
+                ORDER BY p.NOM,p.ID
+                """, recordId, recordId);
+    }
+
+    public void ensureScanCodeColumns() {
+        for (String column : List.of("SCAN_CODE_2", "SCAN_CODE_3")) {
+            Integer count = db.queryForObject(
+                    "SELECT COUNT(*) FROM ALL_TAB_COLUMNS WHERE OWNER='SYSTEM' AND TABLE_NAME='DELIBERA_RECORDS' AND COLUMN_NAME=?",
+                    Integer.class, column);
+            if (count == null) throw new IllegalStateException("Impossible de vérifier les codes complémentaires Délibéra");
+            if (count == 0) db.execute("ALTER TABLE SYSTEM.DELIBERA_RECORDS ADD " + column + " VARCHAR2(100 CHAR)");
+        }
     }
 
     private void ensureRecordCheckpointsTable() {
@@ -206,7 +248,7 @@ public class DeliberaRepository {
 
     public Optional<Map<String, Object>> findActiveRecordByBarcode(String barcode) {
         List<Map<String, Object>> rows = db.queryForList(
-            "SELECT ID,BARCODE,PROJET,REFERENCE,VERSION,POSTE_ID,COUTURIERE_ID,STATUT_REPRISE," +
+            "SELECT ID,BARCODE,PROJET,REFERENCE,VERSION,LIGNE,SCAN_CODE_2,SCAN_CODE_3,POSTE_ID,COUTURIERE_ID,STATUT_REPRISE," +
             "TO_CHAR(CREATED_AT,'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT " +
             "FROM SYSTEM.DELIBERA_RECORDS WHERE BARCODE=? AND STATUT_REPRISE='NOT_RETURNED' " +
             "ORDER BY CREATED_AT DESC FETCH FIRST 1 ROWS ONLY", barcode);
@@ -218,6 +260,12 @@ public class DeliberaRepository {
             "SELECT COUNT(*) FROM SYSTEM.DELIBERA_RECORDS WHERE BARCODE=? AND STATUT_REPRISE='RETURNED'",
             Integer.class, barcode);
         return count != null && count > 0;
+    }
+
+    public void saveScanCodes(long id, List<String> codes) {
+        db.update("UPDATE SYSTEM.DELIBERA_RECORDS SET SCAN_CODE_2=?,SCAN_CODE_3=? WHERE ID=?",
+                new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.VARCHAR, codes.size() > 1 ? codes.get(1) : null),
+                new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.VARCHAR, codes.size() > 2 ? codes.get(2) : null), id);
     }
 
     public long insertRecord(String barcode, String projet, String reference, String version, String ligne,
@@ -322,7 +370,7 @@ public class DeliberaRepository {
 
     public Map<String, Object> findRecordById(long id) {
         return db.queryForMap(
-            "SELECT r.ID, r.BARCODE, r.PROJET, r.REFERENCE, r.VERSION, r.LIGNE, r.CHECKPOINT, " +
+            "SELECT r.ID, r.BARCODE, r.SCAN_CODE_2, r.SCAN_CODE_3, r.PROJET, r.REFERENCE, r.VERSION, r.LIGNE, r.CHECKPOINT, " +
             "r.POSTE_ID, r.COUTURIERE_ID, r.STATUT_REPRISE, r.CREATED_BY, r.RETURN_JUSTIFICATION, r.RETURNED_BY, " +
             "TO_CHAR(r.RETURNED_AT,'YYYY-MM-DD HH24:MI:SS') AS RETURNED_AT, " +
             "TO_CHAR(r.CREATED_AT,'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT, " +
@@ -336,7 +384,7 @@ public class DeliberaRepository {
     public List<Map<String, Object>> listRecords(String projet, String statut, String dateFrom, String dateTo,
                                                   String refDetail, String shift, String createdBy, int page, int limit) {
         StringBuilder sql = new StringBuilder(
-            "SELECT r.ID, r.BARCODE, r.PROJET, r.REFERENCE, r.VERSION, r.LIGNE, r.CHECKPOINT, r.POSTE_ID, r.STATUT_REPRISE, " +
+            "SELECT r.ID, r.BARCODE, r.SCAN_CODE_2, r.SCAN_CODE_3, r.PROJET, r.REFERENCE, r.VERSION, r.LIGNE, r.CHECKPOINT, r.POSTE_ID, r.STATUT_REPRISE, " +
             "r.CREATED_BY, r.RETURN_JUSTIFICATION, r.RETURNED_BY, " +
             "TO_CHAR(r.RETURNED_AT,'YYYY-MM-DD HH24:MI:SS') AS RETURNED_AT, " +
             "TO_CHAR(r.CREATED_AT,'YYYY-MM-DD HH24:MI:SS') AS CREATED_AT, " +

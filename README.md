@@ -69,3 +69,114 @@ accept up to 500 characters per entry. Replacing each list is transactional:
 failed writes preserve its previous contents. If a reference's metadata cannot
 be loaded, editing cannot be saved until the reference is reopened successfully,
 preventing accidental erasure of existing messages or checkpoints.
+
+## Barcode scan validation
+
+Projects can configure a scan length (1–100 characters) during creation or with
+the "Régler − / +" action, including locked system projects. Leave the field
+empty to disable length checking; existing projects start unconfigured to avoid
+blocking their workflows. Settings persist in Oracle PROJECT_SCAN_SETTINGS and
+follow project renames/deletion. No default length is imposed automatically.
+
+Firewall, CSL and Delibera check the full scanned length against the project's
+setting, accepting all character types. Reference recognition accepts a complete
+PDEF or FAS at the start of the code with a serial suffix; the full code no longer
+has to equal the PDEF/FAS. Unrecognized references still produce an explicit error.
+Scanner surrounding whitespace/terminators are trimmed by existing scan inputs.
+
+Rejected scans open a large illustrated error dialog showing the project,
+expected and received lengths, missing or extra character count, and scanned
+value. No new record is written. Existing Delibera records also undergo length
+validation before opening; history remains readable. Firewall/CSL edit validation
+runs before deleting the old rows. Legacy report matching is unchanged.
+
+Validate the frontend popup helper with
+`node --test frontend/src/utils/barcode.test.js`. Oracle barcode integration
+tests are opt-in with `RUN_ORACLE_BARCODE_TESTS=true` and use read-only reference
+queries.
+
+## Version photos
+
+In Projects, administrators and supervisors can use **Photos des versions** to
+choose an existing line/version and add, replace or delete its photo (JPEG/PNG,
+maximum 2 MiB and 20 million pixels). One image is stored per project/line/version
+in Oracle `PROJECT_VERSION_PHOTOS`, so container recreation does not lose images.
+Photos follow project renames and are removed when the project is deleted.
+
+Delibera displays the corresponding photo inside scan preparation, after
+project, line and version have been selected. Once validated, the photo remains
+visible beside the OK and NOK scan fields (below them on small screens), without
+cropping the image. It is optional: missing images are
+clearly indicated and do not block scanning. Loading errors are shown with retry,
+and changing the selection immediately hides any previous photo.
+Oracle photo integration tests use `RUN_ORACLE_PHOTO_TESTS=true`; test writes are
+rolled back without changing existing photos.
+
+## Delibera multi-code scans
+
+The Projects scan-settings button now opens a conditions window. New and existing
+projects can configure 1–3 required fields for both Delibera OK and NOK. Each
+field has an optional length (1–100 characters), exact case-sensitive prefix and
+exact suffix. Empty conditions are not imposed; every configured field still
+requires a scan. Leading zeroes and punctuation are preserved. Code 1 remains the
+piece barcode and must identify a project reference; codes 2 and 3 are additional
+labels for the same piece, not additional pieces.
+
+The operator scans each field and presses Enter (or Validate); focus advances to
+the next field. No piece or NOK defect workflow starts until all fields pass.
+Errors identify the field and failed condition in the centered error dialog.
+Validation also runs server-side before insert, including checkpoint workflows.
+Existing pieces reject complementary codes differing from their saved values.
+Historical records without complementary codes remain readable.
+
+Rules persist in `DELIBERA_SCAN_RULES`; existing projects without new rules retain
+their previous single-field length rule. Firewall/CSL keep their independent
+length-only setting and do not use the Delibera prefix/suffix/multi-code rules.
+Complementary codes persist in `DELIBERA_RECORDS.SCAN_CODE_2/SCAN_CODE_3` and are
+shown in recent scans, record details and Excel exports/imports. Renaming or
+deleting a project also updates/removes its rules.
+
+Frontend checks: `node --test frontend/src/utils/scanRules.test.js`.
+Oracle integration: `RUN_ORACLE_SCAN_RULE_TESTS=true` (test writes rolled back).
+
+## Delibera NOK entry
+
+After the required scans and any checkpoint review, NOK opens the complete entry
+window: piece details, multiple selectable posts, a seamstress search by name or
+employee number, and multiple defect codes. Selection does not save anything:
+the operator must click **Enregistrer**. At least one defect is required.
+Cancelling creates no record; errors retain the form for correction or retry.
+The scanned labels and checkpoint results are saved with the same piece.
+
+All selected posts persist in `DELIBERA_RECORD_POSTES`; the first post remains in
+the legacy `POSTE_ID` column. Details, history and Excel show the combined names,
+and editing retains multiple selections. Historical single-post records continue
+to work without migration of their data. Firewall/CSL and the automatic OK entry
+workflow are unchanged.
+
+The frontend entry HTML is served without caching so reloading after a deployment
+loads the current version. Already-open tabs keep their running version until
+reloaded; close or cancel any unfinished entry before refreshing.
+
+## Scan settings per PDEF and version
+
+In Projects > Parametres projet, first select a PDEF, then one of its versions
+before editing the Firewall/CSL length or Delibera rules. Settings apply to the
+project/PDEF/version tuple across all lines and persist in `REF_SCAN_SETTINGS`.
+Two PDEFs sharing a version can use different lengths, numbers of required labels,
+prefixes and suffixes. A blank length explicitly disables its length condition.
+
+Unconfigured tuples inherit their existing version settings (`VERSION_SCAN_SETTINGS`),
+then project defaults, without overwriting existing settings. In Delibera, code 1
+identifies the PDEF in the preparation version; its rules are then loaded and
+validated before complementary scans become available. Changing code 1 invalidates
+all complementary confirmations. The server rechecks the recognized tuple before
+any insert. Firewall/CSL also use the recognized PDEF/version length.
+Settings follow project rename/delete operations.
+
+## Modal dismissal
+
+Clicking outside a modal does not dismiss it or discard the current form.
+Use its explicit close/cancel button (or the header cross). Successful save
+actions retain their existing completion behavior. This applies to shared
+settings dialogs and the custom Firewall, CSL and Delibera overlays.

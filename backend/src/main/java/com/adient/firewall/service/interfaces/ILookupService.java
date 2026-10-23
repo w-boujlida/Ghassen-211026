@@ -6,6 +6,7 @@ import java.util.List;
 public interface ILookupService {
 
     Map<String, Object> lookupBarcode(String barcode);
+    Map<String, Object> lookupBarcode(String barcode, String project);
 
     Map<String, Object> lookupPoly(String tampon);
 

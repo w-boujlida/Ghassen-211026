@@ -2,6 +2,7 @@ package com.adient.firewall.controller;
 
 import com.adient.firewall.dto.ApiResponse;
 import com.adient.firewall.service.interfaces.IProjectService;
+import com.adient.firewall.repository.QualityRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/projects")
@@ -48,15 +50,92 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("lignes", svc.getLignesProjet(name))));
     }
 
-    /** Only ADMIN and SUPERVISEUR can create projects. */
-    @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
-    public ResponseEntity<ApiResponse<Void>> create(@RequestBody Map<String, String> body) {
-        svc.createProject(body.get("name"));
-        return ResponseEntity.ok(ApiResponse.ok(null,
-                "Project '" + body.get("name").toUpperCase() + "' created successfully."));
+    public record ProjectInput(String name, BigDecimal barcodeLength, List<com.adient.firewall.dto.ScanRule> scanRules) {}
+    public record BarcodeLengthInput(BigDecimal barcodeLength) {}
+
+    private static Integer barcodeLength(BigDecimal value) {
+        if (value == null) return null;
+        try {
+            int length = value.intValueExact();
+            QualityRepository.checkBarcodeLengthSetting(length);
+            return length;
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("La longueur doit être un entier entre 1 et 100.", e);
+        }
     }
 
+    @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> create(@RequestBody ProjectInput body) {
+        if (body.scanRules() != null) QualityRepository.checkScanRules(body.scanRules());
+        svc.createProject(body.name(), barcodeLength(body.barcodeLength()), body.scanRules());
+        return ResponseEntity.ok(ApiResponse.ok(null,
+                "Project '" + body.name().toUpperCase() + "' created successfully."));
+    }
+
+    public record ScanRulesInput(List<com.adient.firewall.dto.ScanRule> rules) {}
+    public record ScanSettingsInput(BigDecimal barcodeLength, List<com.adient.firewall.dto.ScanRule> rules) {}
+
+    @GetMapping("/{name}/reference-scan-settings")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getReferenceScanSettings(
+            @PathVariable String name, @RequestParam(required = false) String pdef,
+            @RequestParam(required = false) String version) {
+        if (pdef == null || version == null) throw new IllegalArgumentException("Choisissez un PDEF puis une version.");
+        return ResponseEntity.ok(ApiResponse.ok(svc.getReferenceScanSettings(name, pdef, version)));
+    }
+
+    @PutMapping("/{name}/reference-scan-settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setReferenceScanSettings(
+            @PathVariable String name, @RequestParam(required = false) String pdef,
+            @RequestParam(required = false) String version, @RequestBody ScanSettingsInput body) {
+        if (pdef == null || version == null) throw new IllegalArgumentException("Choisissez un PDEF puis une version.");
+        svc.setReferenceScanSettings(name, pdef, version, barcodeLength(body.barcodeLength()), body.rules());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/{name}/version-scan-settings")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getVersionScanSettings(
+            @PathVariable String name, @RequestParam(required = false) String version) {
+        if (version == null) throw new IllegalArgumentException("Choisissez une version.");
+        return ResponseEntity.ok(ApiResponse.ok(svc.getVersionScanSettings(name, version)));
+    }
+
+    @PutMapping("/{name}/version-scan-settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setVersionScanSettings(
+            @PathVariable String name, @RequestParam(required = false) String version, @RequestBody ScanSettingsInput body) {
+        if (version == null) throw new IllegalArgumentException("Choisissez une version.");
+        svc.setVersionScanSettings(name, version, barcodeLength(body.barcodeLength()), body.rules());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PutMapping("/{name}/scan-settings")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setScanSettings(@PathVariable String name, @RequestBody ScanSettingsInput body) {
+        svc.setScanSettings(name, barcodeLength(body.barcodeLength()), body.rules());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @GetMapping("/{name}/scan-rules")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getScanRules(@PathVariable String name) {
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("rules", svc.getDeliberaScanRules(name))));
+    }
+
+    @PutMapping("/{name}/scan-rules")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setScanRules(@PathVariable String name, @RequestBody ScanRulesInput body) {
+        svc.setDeliberaScanRules(name, body.rules());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    @PutMapping("/{name}/barcode-length")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setBarcodeLength(
+            @PathVariable String name, @RequestBody BarcodeLengthInput body) {
+        svc.setBarcodeLength(name, barcodeLength(body.barcodeLength()));
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
     /** Upsert refs: insert if PDEF not found, update if already exists. */
     @PostMapping("/{name}/refs/upsert")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR', 'OPERATEUR', 'OPERATOR')")

@@ -11,9 +11,28 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import Modal, { ModalBtn, ModalField } from '../components/Modal.jsx'
 import './Projects.css'
+import VersionPhotoManager from '../components/VersionPhotoManager.jsx'
+import ProjectScanSettings from '../components/ProjectScanSettings.jsx'
+import ScanRulesEditor, { emptyScanRule, validScanRules } from '../components/ScanRulesEditor.jsx'
 
 const EMPTY_REF = { pdef: '', fas: '', designation: '', version: '', refDetail: '', ligne: '' }
 const REF_HEADERS = ['PDEF', 'FAS', 'DESIGNATION', 'VERSION', 'REF_DETAIL', 'LIGNE']
+
+function BarcodeLengthField({ value, onChange, disabled }) {
+  const number = value === '' ? null : Number(value)
+  return <div>
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      <button type="button" className="btn-icon" aria-label="Diminuer la longueur" disabled={disabled || number === 1}
+        onClick={() => onChange(Math.max(1, (number ?? 26) - 1))}>−</button>
+      <input type="number" className="form-input" aria-label="Nombre de caractères à scanner"
+        min="1" max="100" value={value} disabled={disabled}
+        onChange={e => onChange(e.target.value)} />
+      <button type="button" className="btn-icon" aria-label="Augmenter la longueur" disabled={disabled || number === 100}
+        onClick={() => onChange(Math.min(100, (number ?? 26) + 1))}>+</button>
+    </div>
+    <p className="project-help">Tous les caractères sont acceptés. Champ vide : contrôle de longueur désactivé. Exemple : 26.</p>
+  </div>
+}
 
 function ProjectSteps({ step }) {
   return (
@@ -63,6 +82,11 @@ export default function Projects() {
   // ── Add project modal ──
   const [addModal, setAddModal]       = useState(false)
   const [newName, setNewName]         = useState('')
+  const [photoProject, setPhotoProject] = useState(null)
+  const [newBarcodeLength, setNewBarcodeLength] = useState('')
+  const [newScanRules, setNewScanRules] = useState([emptyScanRule()])
+  const [lengthProject, setLengthProject] = useState(null)
+  const [barcodeLength, setBarcodeLength] = useState('')
   const [creatingRefs, setCreatingRefs] = useState(false)
   const createPendingRef = useRef(false)
 
@@ -340,7 +364,11 @@ export default function Projects() {
     createPendingRef.current = true
     setSaving(true); setFormError('')
     try {
-      await projectsApi.create(name)
+      const length = newBarcodeLength === '' ? null : Number(newBarcodeLength)
+      if (length !== null && (!Number.isInteger(length) || length < 1 || length > 100))
+        throw new Error('La longueur doit être un entier entre 1 et 100.')
+      if (!validScanRules(newScanRules)) throw new Error('Vérifiez les conditions de scan Délibéra.')
+      await projectsApi.create(name, length, newScanRules)
       setAddModal(false); setNewName('')
       openRefs(name, true)
       loadProjects()
@@ -838,7 +866,7 @@ export default function Projects() {
               </div>
               {canCreateProjects && (
                 <div className="table-controls">
-                  <button className="add-btn" style={{ background: '#15803d' }} onClick={() => { setNewName(''); setFormError(''); setAddModal(true) }}>
+                  <button className="add-btn" style={{ background: '#15803d' }} onClick={() => { setNewName(''); setNewBarcodeLength(''); setNewScanRules([emptyScanRule()]); setFormError(''); setAddModal(true) }}>
                     <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     Nouveau Projet
                   </button>
@@ -852,12 +880,13 @@ export default function Projects() {
                     <tr>
                       <th style={{ width: 52 }}>#</th>
                       <th>Projet</th>
+                      <th>Paramètres projet</th>
                       <th style={{ width: 280, textAlign: 'right' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {projects.length === 0 && (
-                      <tr><td colSpan={3} style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>Aucun projet</td></tr>
+                      <tr><td colSpan={4} style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>Aucun projet</td></tr>
                     )}
                     {projects.map((p, idx) => (
                       <tr key={p.name}>
@@ -873,8 +902,18 @@ export default function Projects() {
                             )}
                           </div>
                         </td>
+                        <td>
+                          <span>{p.barcode_length == null ? 'Défaut non configuré' : `Défaut : ${p.barcode_length} caractères`}</span>
+                          {canModifyProjects && <button className="btn-icon" style={{ marginLeft: 10 }}
+                            onClick={() => { setLengthProject(p.name); setBarcodeLength(p.barcode_length ?? ''); setFormError('') }}>
+                            Régler − / +
+                          </button>}
+                        </td>
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            {canModifyProjects && <button className="btn-icon" onClick={() => setPhotoProject(p.name)}>
+                              Photos des versions
+                            </button>}
                             <button className="btn-icon btn-refs" onClick={() => openRefs(p.name)}>
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
                               Références
@@ -1199,6 +1238,7 @@ export default function Projects() {
       )}
 
       {/* ══ ADD PROJECT MODAL ══ */}
+      {photoProject && <VersionPhotoManager project={photoProject} onClose={() => setPhotoProject(null)} />}
       {addModal && createPortal(
         <Modal title="Étape 1 — Nouveau projet" onClose={() => { if (!saving) setAddModal(false) }} maxWidth={560}
           footer={<>
@@ -1214,8 +1254,16 @@ export default function Projects() {
               onChange={e => { setNewName(e.target.value.toUpperCase()); setFormError('') }} />
           </ModalField>
           <p className="project-help">20 caractères maximum : lettres majuscules, chiffres et _ ; commencez par une lettre.</p>
+          <ModalField label="Longueur du scan Firewall / CSL par défaut (modifiable ensuite par version)">
+            <BarcodeLengthField value={newBarcodeLength} onChange={setNewBarcodeLength} disabled={saving} />
+          </ModalField>
+          <ScanRulesEditor rules={newScanRules} onChange={setNewScanRules} disabled={saving} />
         </Modal>, document.body
       )}
+
+      {lengthProject && <ProjectScanSettings project={lengthProject} currentLength={barcodeLength}
+        onClose={() => setLengthProject(null)}
+        onSaved={() => { setLengthProject(null); loadProjects(); showToast('Conditions de scan enregistrées') }} />}
 
       {/* ══ RENAME MODAL ══ */}
       {renameModal && (

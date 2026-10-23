@@ -5,6 +5,8 @@ import { projectsApi } from '../api/projects.api.js'
 import { parseExcelFile } from '../utils/helpers.js'
 import Pagination from '../components/Pagination.jsx'
 import DeliberaScanSetup from '../components/DeliberaScanSetup.jsx'
+import DeliberaMultiScanner from '../components/DeliberaMultiScanner.jsx'
+import VersionPhoto from '../components/VersionPhoto.jsx'
 import DeliberaReturnModal from '../components/DeliberaReturnModal.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { useLang } from '../contexts/LangContext.jsx'
@@ -85,7 +87,10 @@ function ScanRecordsTable({ title, records, total, loading, error, status }) {
                 return (
                   <tr key={record.ID || record.id || `${barcode}-${index}`}>
                     <td>{(record.CREATED_AT || record.createdAt || '').replace('T', ' ').slice(0, 16) || '—'}</td>
-                    <td><code>{barcode}</code></td>
+                    <td><code>{barcode}</code>
+                      {[record.SCAN_CODE_2, record.SCAN_CODE_3].map((code, i) => code &&
+                        <div key={i}><small>Code {i + 2} : </small><code>{code}</code></div>)}
+                    </td>
                     <td>{record.REFERENCE || record.reference || '—'}</td>
                     <td>
                       {[record.PROJET || record.projet, record.LIGNE || record.ligne].filter(Boolean).join(' / ') || '—'}
@@ -111,108 +116,6 @@ function ScanRecordsTable({ title, records, total, loading, error, status }) {
         </div>
       )}
     </section>
-  )
-}
-
-function NokDefectModal({ piece, defCodes, loading, scanning, inputRef, onScan, onSelect, onCancel }) {
-  const [search, setSearch] = useState('')
-  const [defectBarcode, setDefectBarcode] = useState('')
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const filteredDefects = defCodes.filter(defect =>
-    String(defect.cod || '').toLocaleLowerCase().includes(normalizedSearch) ||
-    String(defect.description || '').toLocaleLowerCase().includes(normalizedSearch)
-  )
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 100)
-    return () => window.clearTimeout(timer)
-  }, [inputRef])
-
-  const submitScannedDefect = event => {
-    event.preventDefault()
-    const scanned = defectBarcode.trim()
-    if (!scanned || scanning) return
-    setDefectBarcode('')
-    onScan(scanned)
-  }
-
-  return (
-    <div className="delibera-nok-defect-overlay" role="presentation">
-      <section
-        className="delibera-nok-defect-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delibera-nok-defect-title"
-      >
-        <header className="delibera-nok-defect-modal__header">
-          <div>
-            <span className="delibera-nok-defect-modal__eyebrow">Enregistrement NOK</span>
-            <h3 id="delibera-nok-defect-title">Choisir le défaut</h3>
-            <p>Pièce : <strong>{piece.barcodeRaw}</strong></p>
-          </div>
-          <button type="button" onClick={onCancel} disabled={scanning} aria-label="Annuler">
-            ×
-          </button>
-        </header>
-
-        <form className="delibera-nok-defect-modal__scan" onSubmit={submitScannedDefect}>
-          <label htmlFor="delibera-nok-defect-barcode">Scanner l’étiquette défaut</label>
-          <div>
-            <input
-              id="delibera-nok-defect-barcode"
-              ref={inputRef}
-              type="text"
-              autoComplete="off"
-              placeholder="Scannez le code défaut ou choisissez-le dans la liste"
-              value={defectBarcode}
-              onChange={event => setDefectBarcode(event.target.value)}
-              disabled={scanning}
-            />
-            <button type="submit" disabled={scanning || !defectBarcode.trim()}>
-              {scanning ? 'Enregistrement…' : 'Scanner'}
-            </button>
-          </div>
-        </form>
-
-        <div className="delibera-nok-defect-modal__list-heading">
-          <h4>Liste des défauts</h4>
-          <span>{filteredDefects.length} défaut(s)</span>
-        </div>
-        <input
-          className="delibera-nok-defect-modal__search"
-          type="search"
-          placeholder="Rechercher par code ou description…"
-          value={search}
-          onChange={event => setSearch(event.target.value)}
-        />
-
-        <div className="delibera-nok-defect-modal__list">
-          {loading ? (
-            <p className="delibera-nok-defect-modal__empty">Chargement des défauts…</p>
-          ) : filteredDefects.length === 0 ? (
-            <p className="delibera-nok-defect-modal__empty">
-              {defCodes.length ? 'Aucun défaut ne correspond à la recherche.' : 'Aucun défaut disponible.'}
-            </p>
-          ) : filteredDefects.map(defect => (
-            <button
-              key={defect.cod}
-              type="button"
-              className="delibera-nok-defect-option"
-              onClick={() => onSelect(defect)}
-              disabled={scanning}
-            >
-              <code>{defect.cod}</code>
-              <span>{defect.description || 'Sans description'}</span>
-              <strong aria-hidden="true">›</strong>
-            </button>
-          ))}
-        </div>
-        <footer className="delibera-nok-defect-modal__footer">
-          <span>Le défaut sélectionné sera enregistré automatiquement.</span>
-          <button type="button" onClick={onCancel} disabled={scanning}>Annuler</button>
-        </footer>
-      </section>
-    </div>
   )
 }
 
@@ -281,7 +184,7 @@ function DefautGrid({ defCodes, selected, onChange, searchRef }) {
           : filtered.map(d => {
               const isSel = Boolean(selected.find(s => s.codeDefaut === d.cod))
               return (
-                <button key={d.cod} type="button" onClick={() => toggle(d.cod, d.description)}
+                <button key={d.cod} type="button" aria-pressed={isSel} onClick={() => toggle(d.cod, d.description)}
                   style={{ padding:'9px 8px', borderRadius:8, cursor:'pointer', textAlign:'left',
                     background: isSel ? '#dcfce7' : '#fff',
                     border: `2px solid ${isSel ? '#22c55e' : '#e2e8f0'}`,
@@ -306,29 +209,36 @@ function DefautGrid({ defCodes, selected, onChange, searchRef }) {
 }
 
 // ── ScanModal — création ou édition ultra-rapide ──────────────────────────────
-function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showToast }) {
+function ScanModal({ mode, barcodeInfo, record, defCodes, defectsLoading, checkpointResults = [], onClose, onDone, showToast }) {
   const { t } = useLang()
   const isEdit = mode === 'edit'
   const initDefauts = isEdit
     ? (record?.defauts || []).map(d => ({ codeDefaut: d.codeDefaut, descDefaut: d.descDefaut }))
     : []
 
-  const [posteId,         setPosteId]         = useState(isEdit ? String(record?.POSTE_ID ?? record?.posteId ?? '') : '')
-  const [posteIds,        setPosteIds]        = useState([])
+  const [posteIds,        setPosteIds]        = useState(() => {
+    if (!isEdit) return []
+    if (record?.postes?.length) return record.postes.map(p => String(p.ID))
+    const id = record?.POSTE_ID ?? record?.posteId
+    return id == null ? [] : [String(id)]
+  })
   const [couturiereId,    setCouturiereId]    = useState(isEdit ? String(record?.COUTURIERE_ID ?? record?.couturiereId ?? '') : '')
   const [selectedDefauts, setSelectedDefauts] = useState(initDefauts)
   const [saving,          setSaving]          = useState(false)
   const [posteSearch,     setPosteSearch]     = useState('')
   const [modalPostes,      setModalPostes]      = useState([])
   const [modalCouturieres, setModalCouturieres] = useState([])
-  const [checkpointOptions,  setCheckpointOptions]  = useState([])
-  const [selectedCheckpoint, setSelectedCheckpoint] = useState('')
+  const [couturiereSearch, setCouturiereSearch] = useState('')
+  const [optionsLoading, setOptionsLoading] = useState(true)
+  const [optionsError, setOptionsError] = useState('')
+  const [optionsRetry, setOptionsRetry] = useState(0)
 
   // Refs pour l'auto-focus / auto-avance
   const couturiereRef = useRef(null)
   const defSearchRef  = useRef(null)
+  const savingRef = useRef(false)
 
-  const barcode = isEdit ? (record?.BARCODE || record?.barcode || '') : (barcodeInfo?.barcode || '')
+  const barcode = isEdit ? (record?.BARCODE || record?.barcode || '') : (barcodeInfo?.barcodeRaw || barcodeInfo?.barcode || '')
   const projet  = isEdit ? (record?.PROJET  || record?.projet  || '') : (barcodeInfo?.projet  || '')
   const ref_    = isEdit ? (record?.REFERENCE || record?.reference || '') : (barcodeInfo?.reference || '')
   const version = isEdit ? (record?.VERSION || record?.version || '') : (barcodeInfo?.version || '')
@@ -338,22 +248,19 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
   // Postes are global (POSTES.PROJET is NULL in DB) — always fetch all
   // Couturieres are project-specific — filter by the scanned piece's project
   useEffect(() => {
-    deliberaApi.getPostes()
-      .then(d => setModalPostes(Array.isArray(d) ? d : []))
-      .catch(() => {})
+    let active = true
+    setOptionsLoading(true); setOptionsError('')
     const proj = projet || undefined
-    deliberaApi.getCouturieres(proj ? { projet: proj } : {})
-      .then(d => setModalCouturieres(Array.isArray(d) ? d : []))
-      .catch(() => {})
-  }, [projet])
-
-  // Checkpoints for the scanned reference — nouvelle saisie only
-  useEffect(() => {
-    if (isEdit || !barcodeInfo?.projet || !barcodeInfo?.pdef) return
-    projectsApi.getRefCheckpoints(barcodeInfo.projet, barcodeInfo.pdef)
-      .then(d => setCheckpointOptions(d?.checkpoints || []))
-      .catch(() => setCheckpointOptions([]))
-  }, [isEdit, barcodeInfo?.projet, barcodeInfo?.pdef])
+    Promise.all([deliberaApi.getPostes(), deliberaApi.getCouturieres(proj ? { projet: proj } : {})])
+      .then(([postes, couturieres]) => {
+        if (!Array.isArray(postes) || !Array.isArray(couturieres))
+          throw new Error('Liste des postes ou couturières invalide.')
+        if (active) { setModalPostes(postes); setModalCouturieres(couturieres) }
+      })
+      .catch(e => { if (active) setOptionsError(e.response?.data?.error || e.message || 'Impossible de charger les postes et couturières.') })
+      .finally(() => { if (active) setOptionsLoading(false) })
+    return () => { active = false }
+  }, [projet, optionsRetry])
 
   // Auto-focus sur Couturière à l'ouverture (Poste est maintenant un grid de cartes)
   useEffect(() => {
@@ -366,44 +273,48 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
     setTimeout(() => defSearchRef.current?.focus(), 60)
   }
 
-  const isPosteActive = (id) => isEdit ? posteId === id : posteIds.includes(id)
+  const isPosteActive = (id) => posteIds.includes(id)
   const togglePoste = (id) => {
-    if (isEdit) {
-      setPosteId(id)
-      setTimeout(() => couturiereRef.current?.focus(), 60)
-    } else {
-      setPosteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-    }
+    setPosteIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   const handleSubmit = async () => {
+    if (savingRef.current || optionsLoading || optionsError || defectsLoading) return
     if (!isEdit && selectedDefauts.length === 0) {
       showToast('Sélectionnez au moins un code défaut', 'error')
       setTimeout(() => defSearchRef.current?.focus(), 60)
       return
     }
+    savingRef.current = true
     setSaving(true)
     try {
       let result
       if (isEdit) {
         result = await deliberaApi.updateRecord(record.ID ?? record.id, {
-          posteId:      posteId      ? Number(posteId)      : null,
+          posteId:      posteIds.length ? Number(posteIds[0]) : null,
+          posteIds:     posteIds.map(Number),
           couturiereId: couturiereId ? Number(couturiereId) : null,
           defauts:      selectedDefauts,
         })
       } else {
         result = await deliberaApi.createRecord({
           barcode:      barcodeInfo.barcodeRaw || '',
+          scanCodes:    barcodeInfo.scanCodes,
+          checkpointResults,
+          statutReprise: 'NOT_RETURNED',
           projet, reference: ref_, version, ligne: barcodeInfo?.ligne || null,
-          checkpoint:   selectedCheckpoint || null,
           posteId:      posteIds.length > 0 ? Number(posteIds[0]) : null,
-          posteIds:     posteIds.length > 1  ? posteIds.map(Number) : undefined,
+          posteIds:     posteIds.map(Number),
           couturiereId: couturiereId ? Number(couturiereId) : null,
           defauts:      selectedDefauts,
         })
       }
       onDone(result)
-    } catch (e) { showToast(e.message || 'Erreur', 'error'); setSaving(false) }
+    } catch (e) {
+      showToast(e.response?.data?.error || e.message || 'Erreur', 'error')
+      savingRef.current = false
+      setSaving(false)
+    }
   }
 
   const field = (label, children, required = false) => (
@@ -424,7 +335,8 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
   return (
     <div style={{ position:'fixed', inset:0, zIndex:1100, background:'rgba(10,14,30,0.6)',
       display:'flex', alignItems:'center', justifyContent:'center', padding:20, backdropFilter:'blur(3px)' }}>
-      <div style={{ background:'#fff', borderRadius:18, width:'100%', maxWidth:940,
+      <div role="dialog" aria-modal="true" aria-label={isEdit ? 'Modifier la coiffe' : 'Ajouter une coiffe NOK'}
+        style={{ background:'#fff', borderRadius:18, width:'100%', maxWidth:940,
         maxHeight:'94vh', overflow:'auto', boxShadow:'0 24px 64px rgba(0,0,0,0.25)' }}>
 
         {/* Header */}
@@ -442,24 +354,29 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
             </div>
             <div>
               <div style={{ color:'#fff', fontWeight:800, fontSize:16 }}>
-                {isEdit ? t('delibera_edit_entry') : t('delibera_new_entry')}
+                {isEdit ? t('delibera_edit_entry') : 'Ajouter une coiffe NOK'}
               </div>
               <div style={{ color:'#e9d5ff', fontSize:12, marginTop:1, fontFamily:'monospace' }}>
                 {barcode || 'Saisie manuelle'}
               </div>
             </div>
           </div>
-          <button onClick={onClose}
+          <button onClick={onClose} disabled={saving} aria-label="Fermer"
             style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'#fff', width:36, height:36,
               borderRadius:10, cursor:'pointer', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center' }}>×</button>
         </div>
 
         <div style={{ padding:'20px 26px', display:'flex', flexDirection:'column', gap:18 }}>
+          {optionsLoading && <p role="status">Chargement des postes et couturières…</p>}
+          {optionsError && <div role="alert" className="alert alert-error">{optionsError}
+            <button type="button" onClick={() => setOptionsRetry(n => n + 1)}>Réessayer</button>
+          </div>}
+          <fieldset disabled={saving || optionsLoading} style={{ border:0, padding:0, margin:0, minWidth:0, display:'flex', flexDirection:'column', gap:18 }}>
 
           {/* Infos pièce */}
           {(projet || ref_ || version || ligne_ || design) && (
             <div style={{ background:`${C}08`, border:`1.5px solid ${C}22`, borderRadius:12, padding:'12px 16px',
-              display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10 }}>
+              display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(110px, 1fr))', gap:10 }}>
               {[['Projet', projet], ['Ligne', ligne_], ['Référence', ref_], ['Version', version], ['Désignation', design]]
                 .filter(([, v]) => v)
                 .map(([k, v]) => (
@@ -472,7 +389,7 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
           )}
 
           {/* Two-column layout: Poste + Couturière */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap:20 }}>
 
           {/* Étape 1 — Poste (card grid) */}
           {field('① Poste',
@@ -496,7 +413,7 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
                 />
               </div>
               {/* Chips postes sélectionnés — mode nouvelle saisie uniquement */}
-              {!isEdit && posteIds.length > 0 && (
+              {posteIds.length > 0 && (
                 <div style={{ display:'flex', flexWrap:'wrap', gap:5, padding:'6px 10px',
                   background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:8 }}>
                   <span style={{ fontSize:10, fontWeight:700, color:'#15803d', alignSelf:'center', marginRight:4, textTransform:'uppercase', letterSpacing:'.5px' }}>Sélectionnés :</span>
@@ -520,14 +437,13 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
                 {/* "Aucun" card — toujours visible */}
                 <button
                   onClick={() => {
-                    if (isEdit) { setPosteId(''); setTimeout(() => couturiereRef.current?.focus(), 60) }
-                    else setPosteIds([])
+                    setPosteIds([])
                   }}
                   style={{
                     padding:'8px 6px', borderRadius:9, cursor:'pointer', fontSize:11, fontWeight:600,
-                    border: (isEdit ? posteId === '' : posteIds.length === 0) ? `2px solid ${C}` : '2px solid #e2e8f0',
-                    background: (isEdit ? posteId === '' : posteIds.length === 0) ? `${C}12` : '#f8fafc',
-                    color: (isEdit ? posteId === '' : posteIds.length === 0) ? C : '#94a3b8',
+                    border: posteIds.length === 0 ? `2px solid ${C}` : '2px solid #e2e8f0',
+                    background: posteIds.length === 0 ? `${C}12` : '#f8fafc',
+                    color: posteIds.length === 0 ? C : '#94a3b8',
                     textAlign:'center', transition:'all .12s',
                   }}>
                   Aucun
@@ -545,7 +461,7 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
                     const nom  = p.NOM  || p.nom  || ''
                     const active = isPosteActive(id)
                     return (
-                      <button key={id}
+                      <button key={id} aria-pressed={active}
                         onClick={() => togglePoste(id)}
                         style={{
                           padding:'8px 6px', borderRadius:9, cursor:'pointer', textAlign:'center',
@@ -568,29 +484,23 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
 
           {/* Étape 2 — Couturière */}
           {field('② Couturière',
-            <select ref={couturiereRef} value={couturiereId} onChange={handleCouturiereChange}
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            <input type="search" aria-label="Rechercher une couturière" placeholder="Rechercher par nom ou matricule…"
+              value={couturiereSearch} onChange={e => setCouturiereSearch(e.target.value)} style={selectStyle} />
+            <select ref={couturiereRef} aria-label="Couturière" value={couturiereId} onChange={handleCouturiereChange}
               style={{ ...selectStyle, minHeight: 48 }}
               onFocus={e => { e.target.style.borderColor = C; e.target.style.boxShadow = `0 0 0 3px ${C}18` }}
               onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }}>
               <option value="">— Aucune couturière —</option>
-              {modalCouturieres.filter(c => c.actif === 1 || isEdit).map(c => (
+              {modalCouturieres.filter(c => String(c.id) === couturiereId || ((c.actif === 1 || isEdit) &&
+                `${c.nom} ${c.matricule}`.toLocaleLowerCase().includes(couturiereSearch.trim().toLocaleLowerCase()))).map(c => (
                 <option key={c.id} value={c.id}>{c.nom} ({c.matricule})</option>
               ))}
             </select>
+            </div>
           )}
 
           </div> {/* end two-column */}
-
-          {/* Checkpoint — affiché uniquement si des checkpoints existent pour cette référence */}
-          {!isEdit && checkpointOptions.length > 0 && field('Checkpoint',
-            <select value={selectedCheckpoint} onChange={e => setSelectedCheckpoint(e.target.value)}
-              style={selectStyle}
-              onFocus={e => { e.target.style.borderColor = C; e.target.style.boxShadow = `0 0 0 3px ${C}18` }}
-              onBlur={e => { e.target.style.borderColor = '#e2e8f0'; e.target.style.boxShadow = 'none' }}>
-              <option value="">— Aucun checkpoint —</option>
-              {checkpointOptions.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
 
           {/* Étape 3 — Codes défauts (grille inline, auto-avance depuis Couturière) */}
           {field('③ Codes défauts',
@@ -610,7 +520,7 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
                 border:'1.5px solid #e2e8f0', borderRadius:11, cursor:'pointer', fontWeight:700, fontSize:14 }}>
               Annuler
             </button>
-            <button onClick={handleSubmit} disabled={saving}
+            <button onClick={handleSubmit} disabled={saving || optionsLoading || Boolean(optionsError) || defectsLoading}
               style={{ flex:2, padding:'14px', background: C, color:'#fff', border:'none',
                 borderRadius:11, cursor: saving ? 'wait' : 'pointer', fontWeight:800, fontSize:15,
                 boxShadow:`0 4px 14px ${C}55`, opacity: saving ? 0.6 : 1,
@@ -626,6 +536,7 @@ function ScanModal({ mode, barcodeInfo, record, defCodes, onClose, onDone, showT
               }
             </button>
           </div>
+          </fieldset>
         </div>
       </div>
     </div>
@@ -688,6 +599,8 @@ function VerifyModal({ record, defCodes, onClose, onDone }) {
           <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:10, padding:'12px 16px',
             display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
             {[['Barcode',    record.BARCODE||record.barcode],
+              ['Code 2', record.SCAN_CODE_2],
+              ['Code 3', record.SCAN_CODE_3],
               ['Projet',     record.PROJET||record.projet],
               ['Ligne',      record.LIGNE||record.ligne],
               ['Référence',  record.REFERENCE||record.reference],
@@ -878,7 +791,6 @@ export default function Delibera() {
   const [barcode,     setBarcode]     = useState('')
   const [scanning,    setScanning]    = useState(false)
   const barcodeRef = useRef(null)
-  const nokDefectBarcodeRef = useRef(null)
   const [pendingNokPiece, setPendingNokPiece] = useState(null)
   const pendingNokPieceRef = useRef(null)
   const [pendingNokCheckpointResults, setPendingNokCheckpointResults] = useState([])
@@ -1071,6 +983,7 @@ export default function Delibera() {
       if (mode === 'ok-new') {
         await deliberaApi.createRecord({
           barcode: piece.barcodeRaw,
+          scanCodes: piece.scanCodes,
           projet: piece.projet || null,
           reference: piece.reference || null,
           version: piece.version || null,
@@ -1090,8 +1003,7 @@ export default function Delibera() {
         setPendingNokPiece(piece)
         setPendingNokCheckpointResults(savedResults)
         setCheckpointReview(null)
-        showToast('Points de vérification enregistrés. Sélectionnez maintenant le défaut NOK.', 'warning')
-        window.setTimeout(() => nokDefectBarcodeRef.current?.focus(), 100)
+        showToast('Points de vérification conservés. Complétez maintenant la fenêtre NOK.', 'warning')
       } else {
         const recordId = record.ID ?? record.id
         await deliberaApi.setRecordCheckpoints(recordId, savedResults)
@@ -1108,64 +1020,15 @@ export default function Delibera() {
     }
   }
 
-  const submitNokDefect = async defect => {
-    const piece = pendingNokPieceRef.current
-    if (!piece || !defect || nokScanningRef.current) return
-    nokScanningRef.current = true
-    setScanning(true)
-    try {
-      checkScanType(piece)
-      await deliberaApi.createRecord({
-        barcode: piece.barcodeRaw,
-        projet: piece.projet || null,
-        reference: piece.reference || null,
-        version: piece.version || null,
-        ligne: piece.ligne || null,
-        statutReprise: 'NOT_RETURNED',
-        defauts: [{ codeDefaut: defect.cod, descDefaut: defect.description || '' }],
-        checkpointResults: pendingNokCheckpointResults,
-      })
-      pendingNokPieceRef.current = null
-      setPendingNokPiece(null)
-      setPendingNokCheckpointResults([])
-      showToast(`Pièce NOK enregistrée — défaut ${defect.cod} ✓`)
-      loadRecords()
-      loadKpis()
-      loadScanRecords()
-    } catch (error) {
-      showToast(error?.response?.data?.error || error.message || 'Erreur lors de l’enregistrement NOK', 'error')
-    } finally {
-      nokScanningRef.current = false
-      setScanning(false)
-      window.setTimeout(() => {
-        if (pendingNokPieceRef.current) nokDefectBarcodeRef.current?.focus()
-        else barcodeRef.current?.focus()
-      }, 100)
-    }
-  }
-
-  const handleNokDefectScan = scannedValue => {
-    const normalize = value => String(value ?? '').normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-    const defectCode = normalize(scannedValue)
-    const defect = defCodes.find(item => normalize(item.cod) === defectCode)
-    if (!defect) {
-      showToast(`Code défaut « ${scannedValue} » introuvable. Choisissez un défaut valide dans la liste.`, 'error')
-      window.setTimeout(() => nokDefectBarcodeRef.current?.focus(), 100)
-      return
-    }
-    submitNokDefect(defect)
-  }
-
-  const triggerScan = async () => {
-    const scannedValue = barcode.trim()
-    if (!scannedValue || nokScanningRef.current || pendingNokPieceRef.current || verifyRecord || returnRecord) return
+  const triggerScan = async (scanCodes = [barcode.trim()]) => {
+    const scannedValue = scanCodes[0]
+    if (nokScanningRef.current || pendingNokPieceRef.current || verifyRecord || returnRecord) return
     nokScanningRef.current = true
     setBarcode('')
     setScanning(true)
     try {
       if (!scanType || showScanSetup) throw new Error('Validez le type de pièce avant de scanner.')
-      const data = await deliberaApi.lookupBarcode(scannedValue)
+      const data = await deliberaApi.validateScan(scanType.projet, scanCodes, scanType.version)
       if (data.wasReturnedBefore) throw new Error('Cette pièce est déjà retournée. Rescan impossible.')
       if (data.found) checkScanType(data)
       if (data.hasOpenRecord) {
@@ -1177,7 +1040,7 @@ export default function Delibera() {
             showToast('Pièce déjà retournée – modification interdite', 'warning')
             return
           }
-          const piece = { ...data, barcodeRaw: scannedValue }
+          const piece = { ...data, barcodeRaw: scannedValue, scanCodes }
           const hasCheckpoints = await openCheckpointReview(piece, 'nok-existing', d)
           if (!hasCheckpoints) setVerifyRecord(d)
           showToast('Cette coiffe est déjà enregistrée NOK. Vérifiez les défauts existants.', 'warning')
@@ -1188,11 +1051,11 @@ export default function Delibera() {
       }
 
       if (data.found) {
-        const piece = { ...data, barcodeRaw: scannedValue }
+        const piece = { ...data, barcodeRaw: scannedValue, scanCodes }
         if (await openCheckpointReview(piece, 'nok-new')) return
         pendingNokPieceRef.current = piece
         setPendingNokPiece(piece)
-        showToast('Pièce reconnue. Sélectionnez un défaut ou scannez son étiquette.', 'warning')
+        showToast('Pièce reconnue. Complétez les postes, la couturière et les défauts, puis enregistrez.', 'warning')
       } else {
         showToast('Code-barres non référencé dans aucun projet', 'error')
       }
@@ -1202,29 +1065,21 @@ export default function Delibera() {
       nokScanningRef.current = false
       setScanning(false)
       setTimeout(() => {
-        if (pendingNokPieceRef.current) nokDefectBarcodeRef.current?.focus()
-        else barcodeRef.current?.focus()
+        if (!pendingNokPieceRef.current) barcodeRef.current?.focus()
       }, 100)
     }
   }
 
-  const handleBarcodeKey = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      triggerScan()
-    }
-  }
-
-  const triggerOkScan = async () => {
-    const scannedBarcode = okBarcode.trim()
-    if (!scannedBarcode || okScanningRef.current || returnRecord || verifyRecord) return
+  const triggerOkScan = async (scanCodes = [okBarcode.trim()]) => {
+    const scannedBarcode = scanCodes[0]
+    if (okScanningRef.current || returnRecord || verifyRecord) return
 
     okScanningRef.current = true
     setOkScanning(true)
     setOkBarcode('')
     try {
       if (!scanType || showScanSetup) throw new Error('Validez le type de pièce avant de scanner.')
-      const data = await deliberaApi.lookupBarcode(scannedBarcode)
+      const data = await deliberaApi.validateScan(scanType.projet, scanCodes, scanType.version)
       if (!data.found) throw new Error('Code-barres non référencé dans aucun projet')
       if (data.wasReturnedBefore) throw new Error('Cette pièce est déjà enregistrée comme OK.')
       checkScanType(data)
@@ -1237,16 +1092,17 @@ export default function Delibera() {
         }
         checkScanType({ projet: record.PROJET ?? record.projet, ligne: record.LIGNE ?? record.ligne,
           version: record.VERSION ?? record.version })
-        const piece = { ...data, barcodeRaw: scannedBarcode }
+        const piece = { ...data, barcodeRaw: scannedBarcode, scanCodes }
         const hasCheckpoints = await openCheckpointReview(piece, 'ok-existing', record)
         if (!hasCheckpoints) setReturnRecord(record)
         return
       }
 
-      const piece = { ...data, barcodeRaw: scannedBarcode }
+      const piece = { ...data, barcodeRaw: scannedBarcode, scanCodes }
       if (await openCheckpointReview(piece, 'ok-new')) return
       await deliberaApi.createRecord({
         barcode: scannedBarcode,
+        scanCodes,
         projet: data.projet || null,
         reference: data.reference || null,
         version: data.version || null,
@@ -1267,15 +1123,8 @@ export default function Delibera() {
     }
   }
 
-  const handleOkBarcodeKey = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      triggerOkScan()
-    }
-  }
-
   const selectScanPage = (pageKey) => {
-    if (nokScanningRef.current || okScanningRef.current || returnRecord || verifyRecord) return
+    if (nokScanningRef.current || okScanningRef.current || pendingNokPieceRef.current || returnRecord || verifyRecord) return
     setScanPage(pageKey)
     setBarcode('')
     setOkBarcode('')
@@ -1348,6 +1197,8 @@ export default function Delibera() {
         const barcodeKey = barcodeValue
         const record = recordsByBarcode.get(barcodeKey) || {
           barcode: barcodeValue,
+          scanCodes: [barcodeValue, toText(col('Code 2')), toText(col('Code 3'))].filter((value, i, values) =>
+            i === 0 || value || (i === 1 && values[2])),
           projet: toText(col('Projet', 'Project')),
           reference: toText(col('Référence', 'Reference', 'Ref')),
           version: toText(col('Version')),
@@ -1393,7 +1244,7 @@ export default function Delibera() {
           continue
         }
 
-        let posteId = null
+        let posteIds = []
         let couturiereId = null
         if (record.projet && !projectOptions.has(record.projet.toUpperCase())) {
           const [posteRows, couturiereRows] = await Promise.all([
@@ -1413,21 +1264,25 @@ export default function Delibera() {
             .some(value => normalize(value) === target) || alternatives.some(value => normalize(value) === target))
           return item ? Number(item.ID ?? item.id) : null
         }
-        posteId = matchByName(options.postes, record.poste)
+        const singlePoste = matchByName(options.postes, record.poste)
+        posteIds = singlePoste ? [singlePoste] : record.poste
+          ? record.poste.split(' / ').map(name => matchByName(options.postes, name)) : []
         couturiereId = matchByName(options.couturieres, record.couturiere)
-        if ((record.poste && !posteId) || (record.couturiere && !couturiereId)) {
+        if (posteIds.some(id => !id) || (record.couturiere && !couturiereId)) {
           errors.push(`${record.barcode}: poste ou couturière introuvable (${record.poste || record.couturiere})`)
           continue
         }
         try {
           await deliberaApi.createRecord({
             barcode: record.barcode,
+            scanCodes: record.scanCodes,
             projet: record.projet || null,
             reference: record.reference || null,
             version: record.version || null,
             ligne: record.ligne || null,
             checkpoint: record.checkpoint || null,
-            posteId,
+            posteId: posteIds[0] ?? null,
+            posteIds,
             couturiereId,
             statutReprise: record.statutReprise,
             defauts: record.defauts,
@@ -1515,6 +1370,7 @@ export default function Delibera() {
     setScanModal(null)
     showToast('Enregistré ✓')
     loadRecords(); loadKpis()
+    loadScanRecords()
     setTimeout(() => barcodeRef.current?.focus(), 100)
   }
 
@@ -1544,6 +1400,8 @@ export default function Delibera() {
         '#':              i + 1,
         'Date/Heure':     (r.CREATED_AT||r.createdAt||'').slice(0, 16),
         'Barcode':        r.BARCODE||r.barcode||'',
+        'Code 2':         r.SCAN_CODE_2 || '',
+        'Code 3':         r.SCAN_CODE_3 || '',
         'Projet':         (r.PROJET||r.projet||'').toUpperCase(),
         'Ligne':          r.LIGNE||r.ligne||'',
         'Référence':      r.REFERENCE||r.reference||'',
@@ -1688,7 +1546,7 @@ export default function Delibera() {
 
       {scanPage === 'coiffe-ok' && (
         <>
-          <section className="delibera-fast-scan delibera-fast-scan--ok" aria-label="Scan Coiffe OK">
+          <section className={`delibera-fast-scan delibera-fast-scan--ok${scanType ? ' delibera-fast-scan--with-photo' : ''}`} aria-label="Scan Coiffe OK">
             <div className="delibera-fast-scan__heading">
               <span className="delibera-fast-scan__icon" aria-hidden="true">✓</span>
               <div>
@@ -1697,25 +1555,15 @@ export default function Delibera() {
               </div>
             </div>
             {canWrite ? (
-              <div className="delibera-fast-scan__input-wrap">
-                <input
-                  ref={okBarcodeRef}
-                  type="text"
-                  autoComplete="off"
-                  aria-label="Scanner une coiffe OK"
-                  placeholder="Scanner le code-barres de la pièce OK"
-                  value={okBarcode}
-                  onChange={event => setOkBarcode(event.target.value)}
-                  onKeyDown={handleOkBarcodeKey}
-                  disabled={okScanning || !scanType || showScanSetup || Boolean(returnRecord) || Boolean(verifyRecord)}
-                />
-                <span className="delibera-fast-scan__status" aria-live="polite">
-                  {okScanning ? 'Enregistrement…' : !scanType || showScanSetup ? 'Validation du type requise' : 'Prêt à scanner'}
-                </span>
-              </div>
+              <DeliberaMultiScanner key={JSON.stringify(scanType)} project={scanType?.projet} version={scanType?.version} mode="ok"
+                firstInputRef={okBarcodeRef} onComplete={triggerOkScan}
+                disabled={okScanning || !scanType || showScanSetup || Boolean(returnRecord) || Boolean(verifyRecord) || Boolean(checkpointReview)} />
             ) : (
               <p className="delibera-fast-scan__readonly">Votre profil ne permet pas d’enregistrer des scans.</p>
             )}
+            {scanType && <aside className="delibera-fast-scan__photo" aria-label="Modèle de la pièce à contrôler">
+              <VersionPhoto project={scanType.projet} line={scanType.ligne} version={scanType.version} />
+            </aside>}
           </section>
           <ScanRecordsTable
             title="Dernières coiffes OK"
@@ -1730,38 +1578,28 @@ export default function Delibera() {
 
       {scanPage === 'nok' && (
         <>
-          <section className="delibera-fast-scan delibera-fast-scan--nok" aria-label="Scan pièce NOK">
+          <section className={`delibera-fast-scan delibera-fast-scan--nok${scanType ? ' delibera-fast-scan--with-photo' : ''}`} aria-label="Scan pièce NOK">
             <div className="delibera-fast-scan__heading">
               <span className="delibera-fast-scan__icon" aria-hidden="true">!</span>
               <div>
                 <h3>Add NOK</h3>
                 <p>
                   {pendingNokPiece
-                    ? `Pièce ${pendingNokPiece.barcodeRaw} reconnue. Choisissez un défaut dans la fenêtre ou scannez son étiquette.`
-                    : 'Scannez la pièce non conforme, puis sélectionnez son défaut dans la fenêtre. Enregistrement automatique.'}
+                    ? `Pièce ${pendingNokPiece.barcodeRaw} reconnue. Complétez la fenêtre NOK, puis cliquez sur Enregistrer.`
+                    : 'Scannez la pièce non conforme, sélectionnez les postes, la couturière et les défauts, puis cliquez sur Enregistrer.'}
                 </p>
               </div>
             </div>
             {canWrite ? (
-              <div className="delibera-fast-scan__input-wrap">
-                <input
-                  ref={barcodeRef}
-                  type="text"
-                  autoComplete="off"
-                  aria-label="Scanner une pièce NOK"
-                  placeholder="Scanner le code-barres de la pièce NOK"
-                  value={barcode}
-                  onChange={event => setBarcode(event.target.value)}
-                  onKeyDown={handleBarcodeKey}
-                  disabled={scanning || Boolean(pendingNokPiece) || !scanType || showScanSetup || Boolean(returnRecord) || Boolean(verifyRecord)}
-                />
-                <span className="delibera-fast-scan__status" aria-live="polite">
-                  {scanning ? 'Recherche…' : !scanType || showScanSetup ? 'Validation du type requise' : pendingNokPiece ? 'Choisissez un défaut' : 'Prêt à scanner la pièce'}
-                </span>
-              </div>
+              <DeliberaMultiScanner key={JSON.stringify(scanType)} project={scanType?.projet} version={scanType?.version} mode="nok"
+                firstInputRef={barcodeRef} onComplete={triggerScan}
+                disabled={scanning || Boolean(pendingNokPiece) || !scanType || showScanSetup || Boolean(returnRecord) || Boolean(verifyRecord) || Boolean(checkpointReview)} />
             ) : (
               <p className="delibera-fast-scan__readonly">Votre profil ne permet pas d’enregistrer des scans.</p>
             )}
+            {scanType && <aside className="delibera-fast-scan__photo" aria-label="Modèle de la pièce à contrôler">
+              <VersionPhoto project={scanType.projet} line={scanType.ligne} version={scanType.version} />
+            </aside>}
           </section>
           <ScanRecordsTable
             title="Dernières coiffes NOK"
@@ -2117,15 +1955,22 @@ export default function Delibera() {
       )}
 
       {pendingNokPiece && (
-        <NokDefectModal
-          piece={pendingNokPiece}
+        <ScanModal
+          mode="new"
+          barcodeInfo={pendingNokPiece}
           defCodes={defCodes}
-          loading={defCodesLoading}
-          scanning={scanning}
-          inputRef={nokDefectBarcodeRef}
-          onScan={handleNokDefectScan}
-          onSelect={submitNokDefect}
-          onCancel={() => {
+          defectsLoading={defCodesLoading}
+          checkpointResults={pendingNokCheckpointResults}
+          showToast={showToast}
+          onDone={() => {
+            pendingNokPieceRef.current = null
+            setPendingNokPiece(null)
+            setPendingNokCheckpointResults([])
+            showToast('Pièce NOK enregistrée ✓')
+            loadRecords(); loadKpis(); loadScanRecords()
+            setTimeout(() => barcodeRef.current?.focus(), 100)
+          }}
+          onClose={() => {
             pendingNokPieceRef.current = null
             setPendingNokPiece(null)
             setPendingNokCheckpointResults([])
@@ -2161,7 +2006,7 @@ export default function Delibera() {
       {showImportModal && (
         <div style={{ position:'fixed', inset:0, zIndex:1200, background:'rgba(15,23,42,.65)',
           display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={e => { if (e.target === e.currentTarget && !importing) setShowImportModal(false) }}>
+          >
           <div style={{ background:'#fff', borderRadius:16, width:'100%', maxWidth:500, padding:24,
             boxShadow:'0 12px 40px rgba(0,0,0,.22)' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>

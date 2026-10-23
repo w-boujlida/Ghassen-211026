@@ -1,0 +1,19 @@
+.barcode-error-dialog { position: fixed; inset: 0; margin: auto; width: min(620px, calc(100vw - 32px)); border: 2px solid #dc2626; border-radius: 20px; padding: 28px 32px; text-align: center; color: #1e293b; background: #fff; box-shadow: 0 24px 80px #0006; max-height: calc(100dvh - 32px); overflow: auto; }
+.barcode-error-dialog::backdrop { background: #0f172acc; }
+.barcode-error-dialog svg { display: block; margin: 0 auto 16px; width: 200px; max-width: 100%; }
+.barcode-error-dialog h2 { color: #b91c1c; font-size: 30px; margin: 12px 0; }
+.barcode-error-reason { font-size: 20px; line-height: 1.5; font-weight: 700; background: #fef2f2; padding: 18px; border-radius: 12px; margin: 20px 0 16px; overflow-wrap: anywhere; }
+.barcode-error-dialog dl { text-align: left; padding: 18px 20px; background: #f1f5f9; border-radius: 12px; margin-bottom: 20px; }
+.barcode-error-dialog dt { font-weight: 700; }
+.barcode-error-dialog dd { margin: 4px 0 14px; overflow-wrap: anywhere; font-family: monospace; font-size: 20px; }
+.barcode-error-dialog dd:last-child { margin-bottom: 0; }
+.barcode-error-dialog > p:last-of-type { line-height: 1.5; color: #475569; margin-bottom: 22px; }
+.barcode-error-dialog button { border: 0; border-radius: 10px; background: #b91c1c; color: white; font-size: 19px; font-weight: 700; padding: 15px 28px; cursor: pointer; }
+.barcode-error-dialog button:hover { background: #991b1b; }
+.barcode-error-dialog button:focus-visible { outline: 3px solid #f87171; outline-offset: 4px; }
+@media (max-width: 480px) {
+  .barcode-error-dialog { padding: 20px; }
+  .barcode-error-dialog h2 { font-size: 25px; }
+  .barcode-error-reason { font-size: 18px; }
+  .barcode-error-dialog button { width: 100%; }
+}

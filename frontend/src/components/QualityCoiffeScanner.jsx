@@ -273,13 +273,13 @@ export default function QualityCoiffeScanner({ module, source, api, user, canWri
 
   const scanPiece = async () => {
     const scanned = barcode.trim()
-    if (!scanned || scanningRef.current || pendingPiece) return
+    if (scanningRef.current || pendingPiece) return
     scanningRef.current = true
     setScanning(true)
     setBarcode('')
     setMessage(null)
     try {
-      const data = await lookupApi.barcode(scanned)
+      const data = await lookupApi.barcode(scanned, project)
       const detectedProject = String(data.tableName || '').toUpperCase()
       if (!data.tableName || detectedProject !== project) {
         throw new Error(data.tableName
@@ -321,9 +321,7 @@ export default function QualityCoiffeScanner({ module, source, api, user, canWri
         <span aria-hidden="true">▥</span> Scan coiffes OK / NOK
       </button>
       {open && createPortal(
-        <div className="quality-coiffe-overlay" role="presentation" onMouseDown={event => {
-          if (event.target === event.currentTarget) close()
-        }}>
+        <div className="quality-coiffe-overlay" role="presentation">
           <section className="quality-coiffe-workspace" role="dialog" aria-modal="true" aria-labelledby="quality-coiffe-title">
             <header className="quality-coiffe-workspace__header">
               <div>

@@ -359,23 +359,20 @@ export default function Csl() {
     } catch (e) { alert(e.message) }
   }
 
-  const confirmBarcode = (val) => {
+  const confirmBarcode = async (val) => {
     const bc = val.trim()
-    if (!bc || bc.length < 4) return
-    setPendingBarcode(bc)
-    setMultiRecords([{ ...createEmptyRecord(), barCode: bc }])
-    setCheckpointOptions({})
-    setBarcodeStep('form')
-    lookupApi.barcode(bc).then(d => {
-      setMultiRecords(rs => rs.map((r, i) => i === 0
-        ? { ...r, ref: d.refDetail || d.tableName || '', version: d.version || '', project: d.tableName || '' }
-        : r))
-      if (d.pdef && d.tableName) {
-        projectsApi.getRefCheckpoints(d.tableName, d.pdef)
-          .then(r => setCheckpointOptions(o => ({ ...o, 0: r?.checkpoints || [] })))
-          .catch(() => setCheckpointOptions(o => ({ ...o, 0: [] })))
-      }
-    }).catch(() => {})
+    try {
+      const d = await lookupApi.barcode(bc)
+      const metadata = await projectsApi.getRefCheckpoints(d.tableName, d.pdef)
+      setPendingBarcode(bc)
+      setMultiRecords([{ ...createEmptyRecord(), barCode: bc, ref: d.refDetail || d.tableName || '',
+        version: d.version || '', project: d.tableName || '' }])
+      setCheckpointOptions({ 0: metadata?.checkpoints || [] })
+      setFormError('')
+      setBarcodeStep('form')
+    } catch (error) {
+      setFormError(error.response?.data?.error || error.message)
+    }
   }
 
   const openAdd  = () => {
@@ -401,7 +398,6 @@ export default function Csl() {
   }))
 
   const handleRecBarcodeScan = async (idx, barcode) => {
-    if (!barcode || barcode.length < 8) return
     try {
       const d = await lookupApi.barcode(barcode)
       setMultiRecords(rs => rs.map((r, i) => i === idx ? { ...r, ref: d.refDetail || d.tableName || '', version: d.version || '', project: d.tableName || '' } : r))
@@ -410,7 +406,7 @@ export default function Csl() {
           .then(r => setCheckpointOptions(o => ({ ...o, [idx]: r?.checkpoints || [] })))
           .catch(() => setCheckpointOptions(o => ({ ...o, [idx]: [] })))
       }
-    } catch {}
+    } catch (error) { setFormError(error.response?.data?.error || error.message) }
   }
   const handleRecPolyLookup = async (idx, val) => {
     if (!val) return
@@ -471,6 +467,7 @@ export default function Csl() {
       if (modal === 'add') {
         const invalid = multiRecords.some(r => !r.barCode || !r.poste || r.defects.some(d => !d.codeDef))
         if (invalid) { setFormError('Barcode, poste et code défaut requis pour chaque enregistrement'); setSaving(false); return }
+        for (const record of multiRecords) await lookupApi.barcode(record.barCode)
         const payload = multiRecords.flatMap(r => r.defects.map(d => ({
           barCode: r.barCode, dateFw: '', cqCsl: r.cqCsl, cqDelibera: r.cqDelibera,
           ref: r.ref, version: r.version, poste: r.poste, remarque: r.remarque, reprise: r.reprise,
@@ -482,6 +479,7 @@ export default function Csl() {
         await cslApi.create(payload)
       } else {
         if (!form.barCode || !form.poste || form.defects.some(d => !d.codeDef)) { setFormError('Barcode, poste et code défaut requis'); setSaving(false); return }
+        await lookupApi.barcode(form.barCode)
         if (editingRecord) for (const d of editingRecord.defects) await cslApi.delete(editingRecord.barCode, d.codeDef, source)
         const payload = form.defects.map(d => ({
           barCode: form.barCode, dateFw: form.dateFw, cqCsl: form.cqCsl, cqDelibera: form.cqDelibera,
@@ -1121,7 +1119,7 @@ export default function Csl() {
       {/* ── MODAL Import avec filtre de date ── */}
       {showImportModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={e => { if(e.target===e.currentTarget) setShowImportModal(false) }}>
+          >
           <div style={{ background:'#fff', borderRadius:16, minWidth:420, maxWidth:480, width:'100%', overflow:'hidden', boxShadow:'0 8px 40px rgba(0,0,0,0.22)' }}>
             <div style={{ background:'linear-gradient(135deg,#475569 0%,#334155 100%)', padding:'18px 22px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -1183,7 +1181,7 @@ export default function Csl() {
 
       {/* ── MODAL Not Returned Filter (identique PHP) ── */}
       {showReportModal && (
-        <div className="modal filter-modal" style={{ display: 'block' }} onClick={e => e.target === e.currentTarget && setShowReportModal(false)}>
+        <div className="modal filter-modal" style={{ display: 'block' }}>
           <div className="modal-content" style={{ maxWidth: 480 }}>
             <div className="modal-header" style={{ background: 'linear-gradient(135deg,#1e293b 0%,#334155 100%)', borderRadius: '14px 14px 0 0', padding: '18px 22px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1278,7 +1276,7 @@ export default function Csl() {
 
       {/* ══ MODAL Add New Record — 2-phase single modal ══ */}
       {modal === 'add' && createPortal(
-        <div className="modal" style={{ display: 'block' }} onClick={e => e.target === e.currentTarget && setModal(null)}>
+        <div className="modal" style={{ display: 'block' }}>
           <div className="modal-content" style={barcodeStep === 'scan' ? { maxWidth: 460, margin: '10vh auto' } : {}}>
             <div className="modal-header">
               <h2 className="modal-title">
@@ -1298,6 +1296,7 @@ export default function Csl() {
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Scanner le code-barres</div>
                   <div style={{ fontSize: 13, color: '#64748b', marginBottom: 32 }}>Placez le curseur ici et scannez le produit</div>
+                  {formError && <div role="alert" className="alert alert-error">{formError}</div>}
                   <input
                     ref={barcodeInputRef}
                     autoFocus
@@ -1306,7 +1305,7 @@ export default function Csl() {
                     value={pendingBarcode}
                     onChange={e => setPendingBarcode(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmBarcode(pendingBarcode) } }}
-                    onPaste={e => { setTimeout(() => { const v = e.target.value.trim(); if (v.length >= 6) confirmBarcode(v) }, 30) }}
+                    onPaste={e => { setTimeout(() => confirmBarcode(e.target.value.trim()), 30) }}
                     style={{ width: '100%', padding: '13px 18px', border: '2px solid #fbbf8a', borderRadius: 10, fontSize: 16, fontFamily: 'monospace', outline: 'none', textAlign: 'center', background: '#fff9f5', boxSizing: 'border-box', transition: 'all .2s' }}
                     onFocus={e => { e.target.style.borderColor = '#e8590c'; e.target.style.background = '#fff'; e.target.style.boxShadow = '0 0 0 4px rgba(232,89,12,.12)' }}
                     onBlur={e => { e.target.style.borderColor = '#fbbf8a'; e.target.style.background = '#fff9f5'; e.target.style.boxShadow = 'none' }}
@@ -1450,7 +1449,8 @@ export default function Csl() {
                               <div className="record-barcode-group">
                                 <label className="form-label label-required">Original Bar Code</label>
                                 <input type="text" className="form-input original-barcode-input" placeholder="Scan or enter barcode" value={rec.barCode}
-                                  onChange={e => { updateRec(rIdx, 'barCode', e.target.value); handleRecBarcodeScan(rIdx, e.target.value) }}
+                                  onChange={e => updateRec(rIdx, 'barCode', e.target.value)}
+                                  onBlur={e => { if (e.target.value) handleRecBarcodeScan(rIdx, e.target.value) }}
                                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRecBarcodeScan(rIdx, rec.barCode) } }} />
                               </div>
                               <div className="record-actions">

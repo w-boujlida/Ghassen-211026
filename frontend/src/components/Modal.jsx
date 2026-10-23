@@ -59,7 +59,6 @@ export default function Modal({
           padding: 16,
           backdropFilter: 'blur(2px)',
         }}
-        onClick={e => e.target === e.currentTarget && onClose()}
       >
         {/* Panel */}
         <div

@@ -81,10 +81,54 @@
   --scan-border: #efb9bd;
 }
 
+.delibera-fast-scan--with-photo {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, .55fr);
+  gap: 20px 28px;
+}
+
+.delibera-fast-scan--with-photo > .delibera-fast-scan__heading {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+}
+
+.delibera-fast-scan--with-photo > .delibera-multi-scanner,
+.delibera-fast-scan--with-photo > .delibera-fast-scan__readonly {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  align-self: start;
+}
+
+.delibera-fast-scan__photo {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+}
+
+.delibera-fast-scan__photo .version-photo {
+  margin: 0;
+  border-color: var(--scan-border);
+  background: var(--scan-soft);
+}
+
+.delibera-fast-scan__photo .version-photo figcaption {
+  color: var(--scan-accent);
+}
+
+.delibera-fast-scan__photo .version-photo img {
+  height: 240px;
+}
+
 .delibera-fast-scan__heading {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.delibera-fast-scan__heading > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .delibera-fast-scan__icon {
@@ -316,6 +360,19 @@
   .delibera-fast-scan__input-wrap input {
     min-height: 62px;
     padding: 14px 16px;
+  }
+
+  .delibera-fast-scan__photo {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .delibera-fast-scan__heading {
+    flex-wrap: wrap;
+  }
+
+  .delibera-fast-scan__photo .version-photo img {
+    height: 180px;
   }
 
   .delibera-fast-scan__status {

@@ -188,13 +188,83 @@ public class DeliberaController {
 
     // ─── Barcode lookup ───────────────────────────────────────────────────────
 
+    @GetMapping("/barcode")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> lookupBarcodeQuery(
+            @RequestParam String code, @RequestParam(required = false) String project) {
+        return lookupBarcodeForProject(code, project);
+    }
+
+    public record ScanInput(String project, List<String> codes, String version) {}
+
+    @GetMapping("/scan-settings")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> resolveScanSettings(
+            @RequestParam String project, @RequestParam String version, @RequestParam String code) {
+        var info = qRepo.lookupScanBarcode(List.of(QualityRepository.safe(project)), code, false, version)
+                .orElseThrow(() -> new IllegalArgumentException("Code-barres erroné : aucune référence reconnue pour cette version."));
+        var settings = new LinkedHashMap<>(qRepo.getReferenceScanSettings(project,
+                Objects.toString(info.get("PDEF"), ""), version));
+        settings.put("pdef", info.get("PDEF"));
+        return ResponseEntity.ok(ApiResponse.ok(settings));
+    }
+
+    @PostMapping("/scan-validate")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> validateScan(@RequestBody ScanInput body) {
+        if (body.project() == null || body.project().isBlank())
+            throw new IllegalArgumentException("Projet requis pour vérifier les scans.");
+        if (body.codes() == null || body.codes().isEmpty() || body.codes().get(0) == null || body.codes().get(0).isBlank())
+            throw new IllegalArgumentException("Code-barres erroné : code principal obligatoire.");
+        var result = lookupBarcodeForProject(body.codes().get(0), body.project(), body.version());
+        var recognized = result.getBody().data();
+        if (recognized != null && recognized.get("projet") != null) {
+            String actualVersion = Objects.toString(recognized.get("version"), "");
+            if (body.version() != null && !body.version().trim().equals(actualVersion.trim()))
+                throw new IllegalArgumentException("La version du code scanné ne correspond pas à la version sélectionnée.");
+            validatePieceCodes(String.valueOf(recognized.get("projet")),
+                    Objects.toString(recognized.get("pdef"), ""), actualVersion, body.codes());
+        }
+        var active = repo.findActiveRecordByBarcode(body.codes().get(0));
+        active.ifPresent(record -> {
+            for (int i = 1; i < body.codes().size(); i++) {
+                Object stored = record.get("SCAN_CODE_" + (i + 1));
+                if (stored != null && !stored.toString().equals(body.codes().get(i)))
+                    throw new IllegalArgumentException("Code-barres erroné : projet " + QualityRepository.safe(body.project())
+                            + ", code " + (i + 1) + ". Ne correspond pas au code enregistré pour cette pièce.");
+            }
+        });
+        return result;
+    }
+
+    private void validatePieceCodes(String project, String pdef, String version, List<String> codes) {
+        if (pdef.isBlank()) qRepo.validateDeliberaCodes(project, version, codes);
+        else qRepo.validateDeliberaCodes(project, pdef, version, codes);
+    }
+
+    private void validatePrimaryScan(String project, String pdef, String version, String code) {
+        var rules = pdef.isBlank() ? qRepo.getDeliberaScanRules(project, Objects.toString(version, ""))
+                : qRepo.getDeliberaScanRules(project, pdef, Objects.toString(version, ""));
+        QualityRepository.validateScanRule(project, 1, rules.get(0), code);
+    }
+
     @GetMapping("/barcode/{code}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> lookupBarcode(
             @PathVariable String code) {
+        return lookupBarcodeForProject(code, null);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> lookupBarcodeForProject(String code, String project) {
+        return lookupBarcodeForProject(code, project, null);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> lookupBarcodeForProject(String code, String project, String version) {
         // 1. Check for an existing open (NOT_RETURNED) record for this barcode
         Optional<Map<String, Object>> existingRecord = repo.findActiveRecordByBarcode(code);
         if (existingRecord.isPresent()) {
             Map<String, Object> r = existingRecord.get();
+            var recordProjects = List.of(String.valueOf(r.get("PROJET")));
+            var reference = r.get("VERSION") == null ? qRepo.lookupScanBarcode(recordProjects, code, false)
+                    : qRepo.lookupScanBarcode(recordProjects, code, false, r.get("VERSION").toString());
+            String pdef = reference.map(info -> Objects.toString(info.get("PDEF"), "")).orElse("");
+            validatePrimaryScan(String.valueOf(r.get("PROJET")), pdef, (String) r.get("VERSION"), code);
             Map<String, Object> result = new HashMap<>();
             result.put("found",         true);
             result.put("hasOpenRecord", true);
@@ -203,12 +273,9 @@ public class DeliberaController {
             result.put("reference", r.get("REFERENCE"));
             result.put("version",   r.get("VERSION"));
             result.put("ligne",     r.get("LIGNE"));
-            Optional<Map<String, Object>> referenceInfo =
-                    qRepo.lookupBarcode(qRepo.getProjectNames(), code);
-            referenceInfo.ifPresent(info -> {
+            reference.ifPresent(info -> {
                 result.put("pdef", info.get("PDEF"));
                 result.put("designation", info.get("DESIGNATION"));
-                result.putIfAbsent("reference", info.get("REF_DETAIL"));
             });
             return ResponseEntity.ok(ApiResponse.ok(result));
         }
@@ -223,23 +290,23 @@ public class DeliberaController {
         }
 
         // 3. Look up the barcode in project reference tables (same logic as Firewall/CSL)
-        List<String> projectNames = qRepo.getProjectNames();
-        Optional<Map<String, Object>> barcodeInfo = qRepo.lookupBarcode(projectNames, code);
-        if (barcodeInfo.isPresent()) {
-            Map<String, Object> info = barcodeInfo.get();
-            Map<String, Object> result = new HashMap<>();
-            result.put("found",         true);
-            result.put("hasOpenRecord", false);
-            result.put("projet",      info.get("TABLE_NAME"));
-            result.put("reference",   info.getOrDefault("REF_DETAIL", ""));
-            result.put("version",     info.get("VERSION"));
-            result.put("designation", info.get("DESIGNATION"));
-            result.put("ligne",       info.get("LIGNE"));
-            result.put("pdef",        info.get("PDEF"));
-            return ResponseEntity.ok(ApiResponse.ok(result));
-        }
-
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("found", false)));
+        List<String> projects = project == null || project.isBlank()
+                ? qRepo.getProjectNames() : List.of(QualityRepository.safe(project));
+        Map<String, Object> info = (version == null ? qRepo.lookupScanBarcode(projects, code, false)
+                : qRepo.lookupScanBarcode(projects, code, false, version))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Code-barres erroné : aucune référence reconnue dans ce code. Vérifiez l'étiquette et le projet."));
+        validatePrimaryScan(String.valueOf(info.get("TABLE_NAME")), Objects.toString(info.get("PDEF"), ""), (String) info.get("VERSION"), code);
+        Map<String, Object> result = new HashMap<>();
+        result.put("found",         true);
+        result.put("hasOpenRecord", false);
+        result.put("projet",      info.get("TABLE_NAME"));
+        result.put("reference",   info.getOrDefault("REF_DETAIL", ""));
+        result.put("version",     info.get("VERSION"));
+        result.put("designation", info.get("DESIGNATION"));
+        result.put("ligne",       info.get("LIGNE"));
+        result.put("pdef",        info.get("PDEF"));
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     // ─── Records ─────────────────────────────────────────────────────────────
@@ -269,6 +336,7 @@ public class DeliberaController {
         for (Map<String, Object> row : rows) {
             Map<String, Object> rec = new LinkedHashMap<>(row);
             long recId = toLong(row.get("ID"));
+            enrichPostes(rec, recId);
             rec.put("defauts", mapDefauts(repo.findDefautsByRecordId(recId)));
             enriched.add(rec);
         }
@@ -298,11 +366,24 @@ public class DeliberaController {
         String statutReprise = body.get("statutReprise") instanceof String s ? s : null;
 
         if (barcode == null || barcode.isBlank())
-            return ResponseEntity.badRequest().body(ApiResponse.error("Barcode requis"));
+            throw new IllegalArgumentException("Code-barres erroné : code vide.");
         if (statutReprise != null && !"RETURNED".equals(statutReprise) && !"NOT_RETURNED".equals(statutReprise))
             return ResponseEntity.badRequest().body(ApiResponse.error("Statut de reprise invalide"));
 
-        long recId = repo.insertRecord(barcode, projet, reference, version, ligne, posteId, couturiereId, currentUser(), checkpoint, statutReprise);
+        List<String> projects = projet == null || projet.isBlank() ? qRepo.getProjectNames() : List.of(projet);
+        Map<String, Object> referenceInfo = (version == null ? qRepo.lookupScanBarcode(projects, barcode, false)
+                : qRepo.lookupScanBarcode(projects, barcode, false, version))
+                .orElseThrow(() -> new IllegalArgumentException("Code-barres erroné : aucune référence reconnue dans ce code."));
+        String actualProject = String.valueOf(referenceInfo.get("TABLE_NAME"));
+        if (referenceInfo.get("VERSION") != null) version = referenceInfo.get("VERSION").toString();
+        List<String> scanCodes = parseScanCodes(body.get("scanCodes"), barcode);
+        validatePieceCodes(actualProject, Objects.toString(referenceInfo.get("PDEF"), ""),
+                Objects.toString(referenceInfo.get("VERSION"), ""), scanCodes);
+        List<Long> posteIds = parsePosteIds(body, posteId);
+        posteId = posteIds.isEmpty() ? null : posteIds.get(0);
+        long recId = repo.insertRecord(barcode, actualProject, reference, version, ligne, posteId, couturiereId, currentUser(), checkpoint, statutReprise);
+        repo.saveScanCodes(recId, scanCodes);
+        repo.saveRecordPostes(recId, posteIds);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> defauts = (List<Map<String, Object>>) body.getOrDefault("defauts", Collections.emptyList());
@@ -318,9 +399,51 @@ public class DeliberaController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("id", recId), "Enregistrement créé"));
     }
 
+    private static List<Long> parsePosteIds(Map<String, Object> body, Long posteId) {
+        if (!body.containsKey("posteIds")) return posteId == null ? List.of() : List.of(posteId);
+        if (!(body.get("posteIds") instanceof List<?> values))
+            throw new IllegalArgumentException("La liste des postes est invalide.");
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Object value : values) {
+            if (!(value instanceof Number number))
+                throw new IllegalArgumentException("Identifiant de poste invalide.");
+            long id;
+            try { id = new java.math.BigDecimal(number.toString()).longValueExact(); }
+            catch (ArithmeticException | NumberFormatException e) {
+                throw new IllegalArgumentException("Identifiant de poste invalide.", e);
+            }
+            if (id <= 0) throw new IllegalArgumentException("Identifiant de poste invalide.");
+            ids.add(id);
+        }
+        return List.copyOf(ids);
+    }
+
+    private void enrichPostes(Map<String, Object> record, long id) {
+        var postes = repo.findRecordPostes(id);
+        record.put("postes", postes);
+        if (!postes.isEmpty()) record.put("POSTE_NOM", postes.stream()
+                .map(p -> Objects.toString(p.get("NOM"), "")).collect(Collectors.joining(" / ")));
+    }
+
+    private static List<String> parseScanCodes(Object value, String barcode) {
+        if (value == null) return List.of(barcode);
+        if (!(value instanceof List<?> list) || list.isEmpty() || list.size() > 3)
+            throw new IllegalArgumentException("Code-barres erroné : entre 1 et 3 codes sont requis.");
+        List<String> codes = new ArrayList<>();
+        for (Object code : list) {
+            if (!(code instanceof String text))
+                throw new IllegalArgumentException("Code-barres erroné : champ de scan invalide.");
+            codes.add(text);
+        }
+        if (!barcode.equals(codes.get(0)))
+            throw new IllegalArgumentException("Code-barres erroné : le code principal ne correspond pas au premier champ.");
+        return codes;
+    }
+
     @GetMapping("/records/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getRecord(@PathVariable Long id) {
         Map<String, Object> rec = new LinkedHashMap<>(repo.findRecordById(id));
+        enrichPostes(rec, id);
         rec.put("defauts", mapDefauts(repo.findDefautsByRecordId(id)));
         rec.put("checkpointResults", repo.findRecordCheckpoints(id));
         return ResponseEntity.ok(ApiResponse.ok(rec));
@@ -440,12 +563,16 @@ public class DeliberaController {
     // ─── Update record (poste, couturière, défauts) ──────────────────────────
 
     @PutMapping("/records/{id}")
+    @Transactional("oracleTransactionManager")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateRecord(
             @PathVariable Long id,
             @RequestBody Map<String, Object> body) {
         Long posteId      = body.get("posteId")      instanceof Number n ? n.longValue() : null;
         Long couturiereId = body.get("couturiereId") instanceof Number n ? n.longValue() : null;
+        List<Long> posteIds = parsePosteIds(body, posteId);
+        posteId = posteIds.isEmpty() ? null : posteIds.get(0);
         repo.updateRecord(id, posteId, couturiereId);
+        repo.saveRecordPostes(id, posteIds);
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> defauts = (List<Map<String, Object>>) body.get("defauts");

@@ -166,7 +166,7 @@ public class QualityServiceImpl implements IQualityService {
     @Override
     @Transactional
     public void createRecord(String tablePrefix, String operatorCol, QualityRecordInput in) {
-        String target = detectTable(tablePrefix, in.barCode());
+        String target = detectTable(tablePrefix, in.barCode(), in.project());
         ensureTableReady(target, operatorCol);
         repo.insertQualityRecord(target, operatorCol, buildMap(in, operatorCol));
     }
@@ -321,18 +321,13 @@ public class QualityServiceImpl implements IQualityService {
 
     // ─── Private helpers ──────────────────────────────────────────────────────
 
-    private String detectTable(String prefix, String barcode) {
-        List<String> projects = repo.getProjectNames();
-        for (int len : new int[]{12, 10, 14}) {
-            if (barcode.length() < len) continue;
-            String pdef = barcode.substring(0, len);
-            Optional<Map<String, Object>> hit = repo.lookupBarcode(projects, pdef);
-            if (hit.isPresent()) {
-                String proj = (String) hit.get().get("TABLE_NAME");
-                return QualityRepository.safe(prefix + "_" + proj);
-            }
-        }
-        throw new NoSuchElementException("Barcode not found in any project: " + barcode);
+    private String detectTable(String prefix, String barcode, String project) {
+        List<String> projects = project == null || project.isBlank()
+                ? repo.getProjectNames() : List.of(QualityRepository.safe(project));
+        Map<String, Object> hit = repo.lookupScanBarcode(projects, barcode)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Code-barres erroné : aucune référence reconnue dans ce code."));
+        return QualityRepository.safe(prefix + "_" + hit.get("TABLE_NAME"));
     }
 
     private Map<String, Object> buildMap(QualityRecordInput in, String operatorCol) {

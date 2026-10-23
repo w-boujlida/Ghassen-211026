@@ -1,6 +1,7 @@
 package com.adient.firewall.repository;
 
 import com.adient.firewall.dto.CustomRoleDto;
+import com.adient.firewall.dto.ScanRule;
 import com.adient.firewall.dto.EmployeeDto;
 import com.adient.firewall.dto.QualityRecordDto;
 import com.adient.firewall.dto.UserDto;
@@ -8,9 +9,11 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSetMetaData;
+import java.sql.Types;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -389,6 +392,294 @@ public class QualityRepository {
     // ─── Barcode lookup ───────────────────────────────────────────────────────
 
     private static final Set<String> NUMERIC_PDEF_PROJECTS = Set.of("P6", "P7");
+
+    @PostConstruct
+    public void initBarcodeSettings() {
+        if (!tableExists("REF_SCAN_SETTINGS")) {
+            db.execute("CREATE TABLE SYSTEM.REF_SCAN_SETTINGS (" +
+                    "PROJECT_NAME VARCHAR2(30) NOT NULL, PDEF VARCHAR2(100 CHAR) NOT NULL, " +
+                    "VERSION_NAME VARCHAR2(100 CHAR) NOT NULL, BARCODE_LENGTH NUMBER(3), " +
+                    "RULES_JSON VARCHAR2(4000 CHAR) NOT NULL, PRIMARY KEY (PROJECT_NAME,PDEF,VERSION_NAME))");
+        }
+        if (!tableExists("VERSION_SCAN_SETTINGS")) {
+            db.execute("CREATE TABLE SYSTEM.VERSION_SCAN_SETTINGS (" +
+                    "PROJECT_NAME VARCHAR2(30) NOT NULL, VERSION_NAME VARCHAR2(100 CHAR) NOT NULL, " +
+                    "BARCODE_LENGTH NUMBER(3), RULES_JSON VARCHAR2(4000 CHAR) NOT NULL, " +
+                    "PRIMARY KEY (PROJECT_NAME,VERSION_NAME))");
+        }
+        if (!tableExists("PROJECT_SCAN_SETTINGS")) {
+            db.execute("CREATE TABLE SYSTEM.PROJECT_SCAN_SETTINGS (" +
+                    "PROJECT_NAME VARCHAR2(30) PRIMARY KEY, BARCODE_LENGTH NUMBER(3) " +
+                    "CHECK (BARCODE_LENGTH BETWEEN 1 AND 100))");
+        }
+        if (!tableExists("DELIBERA_SCAN_RULES")) {
+            db.execute("CREATE TABLE SYSTEM.DELIBERA_SCAN_RULES (" +
+                    "PROJECT_NAME VARCHAR2(30) NOT NULL, POSITION NUMBER(1) NOT NULL CHECK (POSITION BETWEEN 1 AND 3), " +
+                    "SCAN_LENGTH NUMBER(3), PREFIX VARCHAR2(100 CHAR), SUFFIX VARCHAR2(100 CHAR), " +
+                    "PRIMARY KEY (PROJECT_NAME,POSITION))");
+        }
+    }
+
+    public List<ScanRule> getDeliberaScanRules(String project) {
+        List<ScanRule> rules = db.query("SELECT SCAN_LENGTH,PREFIX,SUFFIX FROM SYSTEM.DELIBERA_SCAN_RULES " +
+                        "WHERE PROJECT_NAME=? ORDER BY POSITION",
+                (rs, row) -> new ScanRule(rs.getObject("SCAN_LENGTH") == null ? null : rs.getInt("SCAN_LENGTH"),
+                        Objects.toString(rs.getString("PREFIX"), ""), Objects.toString(rs.getString("SUFFIX"), "")),
+                safe(project));
+        return rules.isEmpty() ? List.of(new ScanRule(getBarcodeLength(project), "", "")) : rules;
+    }
+
+    private static String scanVersion(String version) {
+        if (version != null && version.length() > 100) throw new IllegalArgumentException("Version trop longue.");
+        return version == null || version.isBlank() ? " " : version.trim();
+    }
+
+    public Map<String, Object> getVersionScanSettings(String project, String version) {
+        var rows = db.queryForList("SELECT BARCODE_LENGTH,RULES_JSON FROM SYSTEM.VERSION_SCAN_SETTINGS " +
+                "WHERE PROJECT_NAME=? AND VERSION_NAME=?", safe(project), scanVersion(version));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("configured", !rows.isEmpty());
+        result.put("barcodeLength", rows.isEmpty() ? getBarcodeLength(project) : rows.get(0).get("BARCODE_LENGTH"));
+        if (rows.isEmpty()) result.put("rules", getDeliberaScanRules(project));
+        else {
+            try {
+                result.put("rules", new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                        rows.get(0).get("RULES_JSON").toString(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<ScanRule>>() {}));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Conditions de scan illisibles pour cette version.", e);
+            }
+
+        }
+        return result;
+    }
+
+    private static String scanPdef(String pdef) {
+        if (pdef == null || pdef.isBlank() || pdef.length() > 100)
+            throw new IllegalArgumentException("Choisissez un PDEF valide.");
+        return pdef.trim();
+    }
+
+    public Map<String, Object> getReferenceScanSettings(String project, String pdef, String version) {
+        String key = scanPdef(pdef);
+        var rows = db.queryForList("SELECT BARCODE_LENGTH,RULES_JSON FROM SYSTEM.REF_SCAN_SETTINGS " +
+                "WHERE PROJECT_NAME=? AND PDEF=? AND VERSION_NAME=?", safe(project), key, scanVersion(version));
+        if (rows.isEmpty()) {
+            var result = new LinkedHashMap<>(getVersionScanSettings(project, version));
+            result.put("configured", false);
+            return result;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("configured", true);
+        result.put("barcodeLength", rows.get(0).get("BARCODE_LENGTH"));
+        try {
+            result.put("rules", new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                    rows.get(0).get("RULES_JSON").toString(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<ScanRule>>() {}));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Conditions de scan illisibles pour ce PDEF et cette version.", e);
+        }
+        return result;
+    }
+
+    public void setReferenceScanSettings(String project, String pdef, String version, Integer length, List<ScanRule> rules) {
+        String name = safe(project), key = scanPdef(pdef);
+        if (!getProjectNames().contains(name)) throw new IllegalArgumentException("Projet introuvable : " + name);
+        String column = NUMERIC_PDEF_PROJECTS.contains(name) ? "TO_CHAR(PDEF)" : "PDEF";
+        Integer count = db.queryForObject("SELECT COUNT(*) FROM SYSTEM.\"" + name +
+                "\" WHERE TRIM(" + column + ")=? AND NVL(TRIM(VERSION),' ')=?", Integer.class, key, scanVersion(version));
+        if (count == null || count == 0) throw new IllegalArgumentException("Ce PDEF et cette version n'existent pas dans le projet.");
+        checkBarcodeLengthSetting(length);
+        String json;
+        try { json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(checkScanRules(rules)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Impossible d'enregistrer les conditions de scan.", e);
+        }
+        db.update("DELETE FROM SYSTEM.REF_SCAN_SETTINGS WHERE PROJECT_NAME=? AND PDEF=? AND VERSION_NAME=?",
+                name, key, scanVersion(version));
+        db.update("INSERT INTO SYSTEM.REF_SCAN_SETTINGS (PROJECT_NAME,PDEF,VERSION_NAME,BARCODE_LENGTH,RULES_JSON) VALUES (?,?,?,?,?)",
+                name, key, scanVersion(version), new SqlParameterValue(Types.NUMERIC, length), json);
+    }
+
+    public List<ScanRule> getDeliberaScanRules(String project, String pdef, String version) {
+        if (pdef == null || pdef.isBlank()) return getDeliberaScanRules(project, version);
+        Object value = getReferenceScanSettings(project, pdef, version).get("rules");
+        if (!(value instanceof List<?> list)) throw new IllegalStateException("Conditions de scan invalides.");
+        return list.stream().map(ScanRule.class::cast).toList();
+    }
+
+    public void validateDeliberaCodes(String project, String pdef, String version, List<String> codes) {
+        var rules = getDeliberaScanRules(project, pdef, version);
+        if (codes == null || codes.size() != rules.size())
+            throw new IllegalArgumentException("Code-barres erroné : projet " + safe(project) + ", PDEF "
+                    + Objects.toString(pdef, "") + ", version " + Objects.toString(version, "") + ". "
+                    + rules.size() + " champs de scan obligatoires.");
+        for (int i = 0; i < rules.size(); i++) validateScanRule(project, i + 1, rules.get(i), codes.get(i));
+    }
+
+    public List<ScanRule> getDeliberaScanRules(String project, String version) {
+        var settings = getVersionScanSettings(project, version);
+        Object value = settings.get("rules");
+        if (!(value instanceof List<?> list)) throw new IllegalStateException("Conditions de scan invalides.");
+        return list.stream().map(ScanRule.class::cast).toList();
+    }
+
+    public void setVersionScanSettings(String project, String version, Integer length, List<ScanRule> rules) {
+        String name = safe(project);
+        if (!getProjectNames().contains(name)) throw new IllegalArgumentException("Projet introuvable : " + name);
+        Integer exists = db.queryForObject("SELECT COUNT(*) FROM SYSTEM.\"" + name +
+                "\" WHERE NVL(TRIM(VERSION),' ')=?", Integer.class, scanVersion(version));
+        if (exists == null || exists == 0) throw new IllegalArgumentException("Version introuvable dans ce projet.");
+        checkBarcodeLengthSetting(length);
+        String json;
+        try { json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(checkScanRules(rules)); }
+        catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("Impossible d'enregistrer les conditions de scan.", e);
+        }
+        db.update("DELETE FROM SYSTEM.VERSION_SCAN_SETTINGS WHERE PROJECT_NAME=? AND VERSION_NAME=?", name, scanVersion(version));
+        db.update("INSERT INTO SYSTEM.VERSION_SCAN_SETTINGS (PROJECT_NAME,VERSION_NAME,BARCODE_LENGTH,RULES_JSON) VALUES (?,?,?,?)",
+                name, scanVersion(version), new SqlParameterValue(Types.NUMERIC, length), json);
+    }
+
+    public void validateDeliberaCodes(String project, String version, List<String> codes) {
+        var rules = getDeliberaScanRules(project, version);
+        if (codes == null || codes.size() != rules.size())
+            throw new IllegalArgumentException("Code-barres erroné : projet " + safe(project) + ", version "
+                    + Objects.toString(version, "") + ". " + rules.size() + " champs de scan obligatoires.");
+        for (int i = 0; i < rules.size(); i++) validateScanRule(project, i + 1, rules.get(i), codes.get(i));
+    }
+
+    public static List<ScanRule> checkScanRules(List<ScanRule> rules) {
+        if (rules == null || rules.isEmpty() || rules.size() > 3)
+            throw new IllegalArgumentException("Configurez entre 1 et 3 champs de scan.");
+        List<ScanRule> normalized = new ArrayList<>();
+        for (ScanRule rule : rules) {
+            if (rule == null) throw new IllegalArgumentException("Condition de scan manquante.");
+            checkBarcodeLengthSetting(rule.length());
+            String prefix = Objects.toString(rule.prefix(), "");
+            String suffix = Objects.toString(rule.suffix(), "");
+            int p = prefix.codePointCount(0, prefix.length()), s = suffix.codePointCount(0, suffix.length());
+            if (p > 100 || s > 100 || (rule.length() != null && (p > rule.length() || s > rule.length())))
+                throw new IllegalArgumentException("Le début et la fin doivent tenir dans la longueur du code.");
+            if (rule.length() != null && p + s > rule.length()) {
+                int overlap = p + s - rule.length();
+                String endOfPrefix = prefix.substring(prefix.offsetByCodePoints(0, p - overlap));
+                String startOfSuffix = suffix.substring(0, suffix.offsetByCodePoints(0, overlap));
+                if (!endOfPrefix.equals(startOfSuffix))
+                    throw new IllegalArgumentException("Le début et la fin du code sont incompatibles avec sa longueur.");
+            }
+            normalized.add(new ScanRule(rule.length(), prefix, suffix));
+        }
+        return normalized;
+    }
+
+    public void setDeliberaScanRules(String project, List<ScanRule> rules) {
+        List<ScanRule> checked = checkScanRules(rules);
+        String name = safe(project);
+        if (!getProjectNames().contains(name)) throw new IllegalArgumentException("Projet introuvable : " + name);
+        db.update("DELETE FROM SYSTEM.DELIBERA_SCAN_RULES WHERE PROJECT_NAME=?", name);
+        for (int i = 0; i < checked.size(); i++) {
+            ScanRule rule = checked.get(i);
+            db.update("INSERT INTO SYSTEM.DELIBERA_SCAN_RULES (PROJECT_NAME,POSITION,SCAN_LENGTH,PREFIX,SUFFIX) VALUES (?,?,?,?,?)",
+                    name, i + 1, new SqlParameterValue(Types.NUMERIC, rule.length()), rule.prefix(), rule.suffix());
+        }
+    }
+
+    public static void validateScanRule(String project, int position, ScanRule rule, String code) {
+        String label = "Code-barres erroné : projet " + safe(project) + ", code " + position + ". ";
+        if (code == null || code.isBlank()) throw new IllegalArgumentException(label + "Champ obligatoire.");
+        int received = code.codePointCount(0, code.length());
+        if (received > 100) throw new IllegalArgumentException(label + "100 caractères maximum.");
+        if (rule.length() != null && received != rule.length()) {
+            int diff = Math.abs(rule.length() - received);
+            throw new IllegalArgumentException(label + "Attendu : " + rule.length() + " caractères ; reçu : "
+                    + received + ". " + diff + (received < rule.length() ? " caractère(s) manquant(s)." : " caractère(s) en trop."));
+        }
+        if (!code.startsWith(Objects.toString(rule.prefix(), "")))
+            throw new IllegalArgumentException(label + "Le code doit commencer par « " + rule.prefix() + " ».");
+        if (!code.endsWith(Objects.toString(rule.suffix(), "")))
+            throw new IllegalArgumentException(label + "Le code doit finir par « " + rule.suffix() + " ».");
+    }
+
+    public void validateDeliberaCodes(String project, List<String> codes) {
+        List<ScanRule> rules = getDeliberaScanRules(project);
+        if (codes == null || codes.size() != rules.size())
+            throw new IllegalArgumentException("Code-barres erroné : projet " + safe(project) + ". "
+                    + rules.size() + " champs de scan obligatoires.");
+        for (int i = 0; i < rules.size(); i++) validateScanRule(project, i + 1, rules.get(i), codes.get(i));
+    }
+
+    public Integer getBarcodeLength(String project) {
+        List<Integer> lengths = db.queryForList(
+                "SELECT BARCODE_LENGTH FROM SYSTEM.PROJECT_SCAN_SETTINGS WHERE PROJECT_NAME=?",
+                Integer.class, safe(project));
+        return lengths.isEmpty() ? null : lengths.get(0);
+    }
+
+    public static void checkBarcodeLengthSetting(Integer length) {
+        if (length != null && (length < 1 || length > 100))
+            throw new IllegalArgumentException("La longueur doit être comprise entre 1 et 100 caractères.");
+    }
+
+    public void setBarcodeLength(String project, Integer length) {
+        checkBarcodeLengthSetting(length);
+        String name = safe(project);
+        if (!getProjectNames().contains(name)) throw new NoSuchElementException("Projet introuvable : " + name);
+        db.update("MERGE INTO SYSTEM.PROJECT_SCAN_SETTINGS s USING (SELECT ? PROJECT_NAME FROM DUAL) p " +
+                "ON (s.PROJECT_NAME=p.PROJECT_NAME) WHEN MATCHED THEN UPDATE SET BARCODE_LENGTH=? " +
+                "WHEN NOT MATCHED THEN INSERT (PROJECT_NAME,BARCODE_LENGTH) VALUES (p.PROJECT_NAME,?)",
+                name, new SqlParameterValue(Types.NUMERIC, length), new SqlParameterValue(Types.NUMERIC, length));
+    }
+
+    public void validateBarcodeLength(String project, String barcode) {
+        if (barcode == null || barcode.isBlank())
+            throw new IllegalArgumentException("Code-barres erroné : code vide.");
+        Integer expected = getBarcodeLength(project);
+        int received = barcode.codePointCount(0, barcode.length());
+        if (expected != null && received != expected) {
+            int difference = Math.abs(expected - received);
+            throw new IllegalArgumentException("Code-barres erroné : projet " + safe(project)
+                    + ". Attendu : " + expected + " caractères ; reçu : " + received + ". "
+                    + difference + (received < expected ? " caractère(s) manquant(s)." : " caractère(s) en trop."));
+        }
+    }
+
+    public Optional<Map<String, Object>> lookupScanBarcode(List<String> projects, String barcode) {
+        return lookupScanBarcode(projects, barcode, true);
+    }
+
+    public Optional<Map<String, Object>> lookupScanBarcode(List<String> projects, String barcode, boolean checkLength) {
+        return lookupScanBarcode(projects, barcode, checkLength, null);
+    }
+
+    public Optional<Map<String, Object>> lookupScanBarcode(List<String> projects, String barcode, boolean checkLength, String version) {
+        if (barcode == null || barcode.isBlank())
+            throw new IllegalArgumentException("Code-barres erroné : code vide.");
+        for (String project : projects) {
+            String name = safe(project);
+            String pdef = NUMERIC_PDEF_PROJECTS.contains(name) ? "TO_CHAR(PDEF)" : "PDEF";
+            List<Object> params = new ArrayList<>(List.of(barcode, barcode));
+            if (version != null) params.add(scanVersion(version));
+            List<Map<String, Object>> rows = db.queryForList(
+                    "SELECT * FROM (SELECT PDEF,VERSION,REF_DETAIL,LIGNE,'" + name + "' AS TABLE_NAME,DESIGNATION " +
+                    "FROM SYSTEM.\"" + name + "\" WHERE (SUBSTR(?,1,LENGTH(TRIM(" + pdef + ")))=TRIM(" + pdef + ") " +
+                    "OR SUBSTR(?,1,LENGTH(TRIM(FAS_ADIENT_PART_NUMBER)))=TRIM(FAS_ADIENT_PART_NUMBER)) " +
+                    (version == null ? "" : "AND NVL(TRIM(VERSION),' ')=? ") +
+                    "ORDER BY GREATEST(NVL(LENGTH(TRIM(" + pdef + ")),0)," +
+                    "NVL(LENGTH(TRIM(FAS_ADIENT_PART_NUMBER)),0)) DESC) WHERE ROWNUM=1", params.toArray());
+            if (!rows.isEmpty()) {
+                if (checkLength) {
+                    String recognizedPdef = Objects.toString(rows.get(0).get("PDEF"), "");
+                    String recognizedVersion = Objects.toString(rows.get(0).get("VERSION"), "");
+                    Object length = (recognizedPdef.isBlank() ? getVersionScanSettings(name, recognizedVersion)
+                            : getReferenceScanSettings(name, recognizedPdef, recognizedVersion)).get("barcodeLength");
+                    validateScanRule(name, 1, new ScanRule(length == null ? null : ((Number) length).intValue(), "", ""), barcode);
+                }
+                return Optional.of(rows.get(0));
+            }
+        }
+        return Optional.empty();
+    }
 
     public Optional<Map<String, Object>> lookupBarcode(List<String> projectNames, String barcode) {
         if (projectNames.isEmpty()) return Optional.empty();

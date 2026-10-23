@@ -1,5 +1,6 @@
 import http, { unwrap } from '../utils/api.js'
 import { buildQuery } from '../utils/helpers.js'
+import { checkedBarcodeLookup } from '../utils/barcode.js'
 
 export const deliberaApi = {
   // ── KPIs ──────────────────────────────────────────────────────────────────
@@ -25,14 +26,18 @@ export const deliberaApi = {
     http.post('/delibera/couturieres/import', { rows }).then(unwrap),
 
   // ── Barcode ────────────────────────────────────────────────────────────────
-  lookupBarcode: (code) =>
-    http.get(`/delibera/barcode/${encodeURIComponent(code)}`).then(unwrap),
+  resolveScanSettings: (project, version, code) =>
+    checkedBarcodeLookup(code, () => http.get('/delibera/scan-settings', { params: { project, version, code } }).then(unwrap)),
+  lookupBarcode: (code, project) =>
+    checkedBarcodeLookup(code, value => http.get('/delibera/barcode', { params: { code: value, project } }).then(unwrap)),
+  validateScan: (project, codes, version) =>
+    checkedBarcodeLookup(codes[0], () => http.post('/delibera/scan-validate', { project, codes, version }).then(unwrap), codes),
 
   // ── Records ────────────────────────────────────────────────────────────────
   getRecords: (params) =>
     http.get('/delibera/records' + buildQuery(params)).then(unwrap),
   createRecord: (body) =>
-    http.post('/delibera/records', body).then(unwrap),
+    checkedBarcodeLookup(body.barcode, () => http.post('/delibera/records', body).then(unwrap), body.scanCodes),
   getRecord: (id) =>
     http.get(`/delibera/records/${id}`).then(unwrap),
   setRecordCheckpoints: (id, checkpointResults) =>

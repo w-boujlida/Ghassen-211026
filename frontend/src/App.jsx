@@ -24,6 +24,7 @@ import SuiviQualiteStats from './pages/SuiviQualiteStats.jsx'
 import SuiviQualitePublic from './pages/SuiviQualitePublic.jsx'
 import SuiviQualiteShift from './pages/SuiviQualiteShift.jsx'
 import DefautCouturiere from './pages/DefautCouturiere.jsx'
+import BarcodeErrorDialog from './components/BarcodeErrorDialog.jsx'
 
 
 function PrivateRoute({ children }) {
@@ -120,6 +121,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AppRoutes />
+          <BarcodeErrorDialog />
         </BrowserRouter>
       </AuthProvider>
     </LangProvider>

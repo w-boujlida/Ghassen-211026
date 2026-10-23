@@ -10,6 +10,16 @@ public interface IProjectService {
     Map<String, Object> getProjectRefs(String project, int page, int limit);
 
     void createProject(String name);
+    void createProject(String name, Integer barcodeLength);
+    void createProject(String name, Integer barcodeLength, java.util.List<com.adient.firewall.dto.ScanRule> rules);
+    void setBarcodeLength(String name, Integer barcodeLength);
+    java.util.List<com.adient.firewall.dto.ScanRule> getDeliberaScanRules(String name);
+    void setDeliberaScanRules(String name, java.util.List<com.adient.firewall.dto.ScanRule> rules);
+    void setScanSettings(String name, Integer length, java.util.List<com.adient.firewall.dto.ScanRule> rules);
+    java.util.Map<String, Object> getVersionScanSettings(String name, String version);
+    void setVersionScanSettings(String name, String version, Integer length, java.util.List<com.adient.firewall.dto.ScanRule> rules);
+    java.util.Map<String, Object> getReferenceScanSettings(String name, String pdef, String version);
+    void setReferenceScanSettings(String name, String pdef, String version, Integer length, java.util.List<com.adient.firewall.dto.ScanRule> rules);
 
     Map<String, Object> importProjectRefs(String project, List<Map<String, Object>> refs);
 
