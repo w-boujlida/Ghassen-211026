@@ -15,6 +15,7 @@ export const projectsApi = {
   setVersionScanSettings: (name, version, barcodeLength, rules) => http.put(`/projects/${encodeURIComponent(name)}/version-scan-settings`, { barcodeLength, rules }, { params: { version } }).then(unwrap),
   setScanSettings:(name, barcodeLength, rules) => http.put(`/projects/${name}/scan-settings`, { barcodeLength, rules }).then(unwrap),
   setBarcodeLength:(name, barcodeLength) => http.put(`/projects/${name}/barcode-length`, { barcodeLength }).then(unwrap),
+  setScanControls:(name, enabled) => http.put(`/projects/${encodeURIComponent(name)}/scan-controls`, { enabled }).then(unwrap),
   getVersionPhoto:(name, line, version) => http.get(`/projects/${encodeURIComponent(name)}/version-photo`, { params: { line, version } }).then(unwrap),
   setVersionPhoto:(name, line, version, dataUrl) => http.put(`/projects/${encodeURIComponent(name)}/version-photo`, { dataUrl }, { params: { line, version } }).then(unwrap),
   deleteVersionPhoto:(name, line, version) => http.delete(`/projects/${encodeURIComponent(name)}/version-photo`, { params: { line, version } }).then(unwrap),

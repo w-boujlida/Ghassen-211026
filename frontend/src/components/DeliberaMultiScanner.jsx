@@ -10,6 +10,7 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
   const [error, setError] = useState('')
   const [pdef, setPdef] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [focusSignal, setFocusSignal] = useState(0)
   const inputs = useRef([])
   const busy = useRef(false)
   const nextFocus = useRef(0)
@@ -21,7 +22,7 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
   }, [project, version])
   useEffect(() => {
     if (rules && !disabled && !submitting) inputs.current[nextFocus.current]?.focus()
-  }, [rules, disabled, submitting])
+  }, [rules, disabled, submitting, focusSignal])
   const submit = async index => {
     if (busy.current || disabled || !rules) return
     busy.current = true; setSubmitting(true)
@@ -34,6 +35,17 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
         if (current !== generation.current) return
         if (!Array.isArray(data.rules) || data.rules.length < 1 || data.rules.length > 3)
           throw new Error('Configuration de scan invalide. Vérifiez les conditions du PDEF.')
+        if (data.wasReturnedBefore) {
+          const message = 'Cette pièce existe déjà : elle a déjà été scannée et enregistrée. Vérifiez-la dans l’historique.'
+          setRules([{ length: null, prefix: '', suffix: '' }])
+          setCodes(['']); setConfirmed([false]); setPdef(''); nextFocus.current = 0
+          setFocusSignal(tick => tick + 1)
+          setError(message)
+          window.dispatchEvent(new CustomEvent('barcode-error', { detail: {
+            title: 'Pièce déjà scannée', message, barcode: code,
+            hint: 'Enregistrement bloqué. Rescannez une autre pièce.' } }))
+          return
+        }
         effectiveRules = data.rules
         setRules(effectiveRules); setPdef(String(data.pdef ?? ''))
       }
@@ -43,6 +55,7 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
       const message = scanRuleError(project, index, effectiveRules[index], code)
       if (message) {
         nextFocus.current = index
+        setFocusSignal(tick => tick + 1)
         setError(message)
         window.dispatchEvent(new CustomEvent('barcode-error', { detail: { message, barcode: code } }))
         return
@@ -50,11 +63,12 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
       checked[index] = true
       setConfirmed([...checked]); setError('')
       const missing = checked.findIndex(value => !value)
-      if (missing !== -1) { nextFocus.current = missing; return }
+      if (missing !== -1) { nextFocus.current = missing; setFocusSignal(tick => tick + 1); return }
       await onComplete(values)
       if (current !== generation.current) return
       setRules([{ length: null, prefix: '', suffix: '' }])
       setCodes(['']); setConfirmed([false]); setPdef(''); nextFocus.current = 0
+      setFocusSignal(tick => tick + 1)
     } catch (e) {
       if (current === generation.current) setError(e.response?.data?.error || e.message)
     } finally {

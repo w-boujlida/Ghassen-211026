@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Modal, { ModalBtn, ModalField } from './Modal.jsx'
 import ScanRulesEditor, { validScanRules } from './ScanRulesEditor.jsx'
+import SearchableSelect from './SearchableSelect.jsx'
 import { projectsApi } from '../api/projects.api.js'
 
 export default function ProjectScanSettings({ project, onClose, onSaved }) {
@@ -64,20 +65,18 @@ export default function ProjectScanSettings({ project, onClose, onSaved }) {
       {saving ? 'Enregistrement...' : 'Enregistrer'}</ModalBtn>}>
     {error && <div className="alert alert-error" role="alert">{error}</div>}
     <ModalField label="PDEF">
-      <select className="form-input" aria-label="PDEF des conditions de scan" disabled={saving || refsLoading}
-        value={pdef ?? ''}
-        onChange={e => { setPdef(e.target.value || null); setVersion(null); setRules([]); setLoading(true); setError('') }}>
-        <option value="">Choisir un PDEF</option>
-        {pdefs.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
+      <SearchableSelect ariaLabel="PDEF des conditions de scan" disabled={saving || refsLoading}
+        placeholder="Choisir un PDEF"
+        options={pdefs.map(p => ({ value: p, label: p }))}
+        value={pdef}
+        onChange={v => { setPdef(v); setVersion(null); setRules([]); setLoading(true); setError('') }} />
     </ModalField>
     <ModalField label="Version du projet">
-      <select className="form-input" aria-label="Version des conditions de scan" disabled={pdef === null || saving || refsLoading}
-        value={version === null ? '' : JSON.stringify(version)}
-        onChange={e => { setVersion(e.target.value ? JSON.parse(e.target.value) : null); setRules([]); setLoading(true) }}>
-        <option value="">Choisir une version</option>
-        {versions.map(v => <option key={v} value={JSON.stringify(v)}>{v || 'Sans version'}</option>)}
-      </select>
+      <SearchableSelect ariaLabel="Version des conditions de scan" disabled={pdef === null || saving || refsLoading}
+        placeholder="Choisir une version"
+        options={versions.map(v => ({ value: JSON.stringify(v), label: v || 'Sans version' }))}
+        value={version === null ? null : JSON.stringify(version)}
+        onChange={v => { setVersion(v ? JSON.parse(v) : null); setRules([]); setLoading(true) }} />
     </ModalField>
     {refsLoading && <p role="status">Chargement des versions…</p>}
     {!refsLoading && pdefs.length === 0 && <p>Ajoutez les références du projet pour définir ses PDEF et versions.</p>}

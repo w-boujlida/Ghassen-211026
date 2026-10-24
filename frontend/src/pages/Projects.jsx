@@ -175,6 +175,16 @@ export default function Projects() {
       .finally(() => setLoading(false))
   }, [])
 
+  // ── Activer/désactiver les contrôles de scan (OFF = scan par défaut) ──
+  const toggleScanControls = async (p) => {
+    const enable = p.controls_enabled === false
+    setError('')
+    try {
+      await projectsApi.setScanControls(p.name, enable)
+      loadProjects()
+    } catch (e) { setError(e.response?.data?.error || e.message) }
+  }
+
   // ── Load defect codes ──
   const loadDefCodes = useCallback(() => {
     setDefLoading(true)
@@ -908,6 +918,18 @@ export default function Projects() {
                             onClick={() => { setLengthProject(p.name); setBarcodeLength(p.barcode_length ?? ''); setFormError('') }}>
                             Régler − / +
                           </button>}
+                          {canModifyProjects && <button className="btn-icon"
+                            style={{ marginLeft: 6, fontWeight: 700, ...(p.controls_enabled === false
+                              ? { color: '#b91c1c', borderColor: '#fecaca', background: '#fef2f2' }
+                              : { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' }) }}
+                            title={p.controls_enabled === false
+                              ? 'Scan par défaut actif : code principal uniquement, sans conditions PDEF/version. Cliquer pour activer les contrôles.'
+                              : 'Contrôles activés : les conditions de scan (PDEF/version) sont appliquées. Cliquer pour revenir au scan par défaut.'}
+                            onClick={() => toggleScanControls(p)}>
+                            {p.controls_enabled === false ? '⛔ Scan par défaut' : '✔ Contrôles ON'}
+                          </button>}
+                          {!canModifyProjects && p.controls_enabled === false &&
+                            <span style={{ marginLeft: 8, color: '#b91c1c', fontWeight: 600 }}>· Scan par défaut</span>}
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>

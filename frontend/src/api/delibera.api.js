@@ -38,6 +38,9 @@ export const deliberaApi = {
     http.get('/delibera/records' + buildQuery(params)).then(unwrap),
   createRecord: (body) =>
     checkedBarcodeLookup(body.barcode, () => http.post('/delibera/records', body).then(unwrap), body.scanCodes),
+  // Import CSV : pas de popup bloquante, les erreurs sont collectées ligne par ligne
+  createRecordSilent: (body) =>
+    http.post('/delibera/records', body).then(unwrap),
   getRecord: (id) =>
     http.get(`/delibera/records/${id}`).then(unwrap),
   setRecordCheckpoints: (id, checkpointResults) =>

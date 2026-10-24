@@ -136,6 +136,18 @@ public class ProjectController {
         svc.setBarcodeLength(name, barcodeLength(body.barcodeLength()));
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+
+    public record ScanControlsInput(Boolean enabled) {}
+
+    /** Active/désactive les contrôles de scan du projet (OFF = scan par défaut : code principal uniquement). */
+    @PutMapping("/{name}/scan-controls")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR')")
+    public ResponseEntity<ApiResponse<Void>> setScanControls(
+            @PathVariable String name, @RequestBody ScanControlsInput body) {
+        if (body.enabled() == null) throw new IllegalArgumentException("Précisez enabled (true/false).");
+        svc.setScanControlsEnabled(name, body.enabled());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
     /** Upsert refs: insert if PDEF not found, update if already exists. */
     @PostMapping("/{name}/refs/upsert")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERVISEUR', 'SUPERVISOR', 'OPERATEUR', 'OPERATOR')")

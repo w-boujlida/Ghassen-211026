@@ -13,6 +13,8 @@ public interface IProjectService {
     void createProject(String name, Integer barcodeLength);
     void createProject(String name, Integer barcodeLength, java.util.List<com.adient.firewall.dto.ScanRule> rules);
     void setBarcodeLength(String name, Integer barcodeLength);
+    boolean isScanControlsEnabled(String name);
+    void setScanControlsEnabled(String name, boolean enabled);
     java.util.List<com.adient.firewall.dto.ScanRule> getDeliberaScanRules(String name);
     void setDeliberaScanRules(String name, java.util.List<com.adient.firewall.dto.ScanRule> rules);
     void setScanSettings(String name, Integer length, java.util.List<com.adient.firewall.dto.ScanRule> rules);

@@ -37,6 +37,7 @@ public class ProjectServiceImpl implements IProjectService {
                 p.put("has_csl",      repo.tableExists("CSL_" + name));
                 p.put("locked",       LOCKED_PROJECTS.contains(name));
                 p.put("barcode_length", barcodeLength);
+                p.put("controls_enabled", repo.isScanControlsEnabled(name));
                 result.add(p);
             } catch (Exception e) {
                 log.warn("Failed to get info for project {}: {}", name, e.getMessage());
@@ -54,6 +55,16 @@ public class ProjectServiceImpl implements IProjectService {
     @Override
     public void setBarcodeLength(String name, Integer barcodeLength) {
         repo.setBarcodeLength(name, barcodeLength);
+    }
+
+    @Override
+    public boolean isScanControlsEnabled(String name) {
+        return repo.isScanControlsEnabled(name);
+    }
+
+    @Override
+    public void setScanControlsEnabled(String name, boolean enabled) {
+        repo.setScanControlsEnabled(name, enabled);
     }
 
     @Override

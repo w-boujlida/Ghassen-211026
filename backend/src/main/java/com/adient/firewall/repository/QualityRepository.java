@@ -43,6 +43,13 @@ public class QualityRepository {
         return cnt != null && cnt > 0;
     }
 
+    private boolean columnExists(String tableName, String columnName) {
+        Integer cnt = db.queryForObject(
+                "SELECT COUNT(*) FROM USER_TAB_COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = ?",
+                Integer.class, tableName.toUpperCase(), columnName.toUpperCase());
+        return cnt != null && cnt > 0;
+    }
+
     public List<String> getFirewallTables() {
         return db.queryForList(
                 "SELECT TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME LIKE 'FIREWALL_%' ORDER BY TABLE_NAME",
@@ -412,6 +419,10 @@ public class QualityRepository {
                     "PROJECT_NAME VARCHAR2(30) PRIMARY KEY, BARCODE_LENGTH NUMBER(3) " +
                     "CHECK (BARCODE_LENGTH BETWEEN 1 AND 100))");
         }
+        if (!columnExists("PROJECT_SCAN_SETTINGS", "CONTROLS_ENABLED")) {
+            db.execute("ALTER TABLE SYSTEM.PROJECT_SCAN_SETTINGS ADD CONTROLS_ENABLED NUMBER(1) DEFAULT 1 NOT NULL " +
+                    "CHECK (CONTROLS_ENABLED IN (0,1))");
+        }
         if (!tableExists("DELIBERA_SCAN_RULES")) {
             db.execute("CREATE TABLE SYSTEM.DELIBERA_SCAN_RULES (" +
                     "PROJECT_NAME VARCHAR2(30) NOT NULL, POSITION NUMBER(1) NOT NULL CHECK (POSITION BETWEEN 1 AND 3), " +
@@ -421,12 +432,44 @@ public class QualityRepository {
     }
 
     public List<ScanRule> getDeliberaScanRules(String project) {
+        if (!isScanControlsEnabled(project)) return defaultScanRules(project);
         List<ScanRule> rules = db.query("SELECT SCAN_LENGTH,PREFIX,SUFFIX FROM SYSTEM.DELIBERA_SCAN_RULES " +
                         "WHERE PROJECT_NAME=? ORDER BY POSITION",
                 (rs, row) -> new ScanRule(rs.getObject("SCAN_LENGTH") == null ? null : rs.getInt("SCAN_LENGTH"),
                         Objects.toString(rs.getString("PREFIX"), ""), Objects.toString(rs.getString("SUFFIX"), "")),
                 safe(project));
-        return rules.isEmpty() ? List.of(new ScanRule(getBarcodeLength(project), "", "")) : rules;
+        return rules.isEmpty() ? defaultScanRules(project) : rules;
+    }
+
+    /** Scan par défaut : contrôles désactivés → code principal uniquement, longueur par défaut du projet. */
+    private List<ScanRule> defaultScanRules(String project) {
+        return List.of(new ScanRule(getBarcodeLength(project), "", ""));
+    }
+
+    private Map<String, Object> defaultScanSettings(String project) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("configured", false);
+        result.put("controlsEnabled", false);
+        result.put("barcodeLength", getBarcodeLength(project));
+        result.put("rules", defaultScanRules(project));
+        return result;
+    }
+
+    /** Contrôles de scan activés ou non pour ce projet (activés par défaut). */
+    public boolean isScanControlsEnabled(String project) {
+        List<Integer> flags = db.queryForList(
+                "SELECT CONTROLS_ENABLED FROM SYSTEM.PROJECT_SCAN_SETTINGS WHERE PROJECT_NAME=?",
+                Integer.class, safe(project));
+        return flags.isEmpty() || flags.get(0) == null || flags.get(0) != 0;
+    }
+
+    public void setScanControlsEnabled(String project, boolean enabled) {
+        String name = safe(project);
+        if (!getProjectNames().contains(name)) throw new NoSuchElementException("Projet introuvable : " + name);
+        db.update("MERGE INTO SYSTEM.PROJECT_SCAN_SETTINGS s USING (SELECT ? PROJECT_NAME FROM DUAL) p " +
+                "ON (s.PROJECT_NAME=p.PROJECT_NAME) WHEN MATCHED THEN UPDATE SET CONTROLS_ENABLED=? " +
+                "WHEN NOT MATCHED THEN INSERT (PROJECT_NAME,CONTROLS_ENABLED) VALUES (p.PROJECT_NAME,?)",
+                name, enabled ? 1 : 0, enabled ? 1 : 0);
     }
 
     private static String scanVersion(String version) {
@@ -435,10 +478,12 @@ public class QualityRepository {
     }
 
     public Map<String, Object> getVersionScanSettings(String project, String version) {
+        if (!isScanControlsEnabled(project)) return defaultScanSettings(project);
         var rows = db.queryForList("SELECT BARCODE_LENGTH,RULES_JSON FROM SYSTEM.VERSION_SCAN_SETTINGS " +
                 "WHERE PROJECT_NAME=? AND VERSION_NAME=?", safe(project), scanVersion(version));
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("configured", !rows.isEmpty());
+        result.put("controlsEnabled", true);
         result.put("barcodeLength", rows.isEmpty() ? getBarcodeLength(project) : rows.get(0).get("BARCODE_LENGTH"));
         if (rows.isEmpty()) result.put("rules", getDeliberaScanRules(project));
         else {
@@ -461,6 +506,7 @@ public class QualityRepository {
     }
 
     public Map<String, Object> getReferenceScanSettings(String project, String pdef, String version) {
+        if (!isScanControlsEnabled(project)) return defaultScanSettings(project);
         String key = scanPdef(pdef);
         var rows = db.queryForList("SELECT BARCODE_LENGTH,RULES_JSON FROM SYSTEM.REF_SCAN_SETTINGS " +
                 "WHERE PROJECT_NAME=? AND PDEF=? AND VERSION_NAME=?", safe(project), key, scanVersion(version));
@@ -471,6 +517,7 @@ public class QualityRepository {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("configured", true);
+        result.put("controlsEnabled", true);
         result.put("barcodeLength", rows.get(0).get("BARCODE_LENGTH"));
         try {
             result.put("rules", new com.fasterxml.jackson.databind.ObjectMapper().readValue(

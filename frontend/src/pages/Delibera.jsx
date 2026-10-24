@@ -1029,7 +1029,15 @@ export default function Delibera() {
     try {
       if (!scanType || showScanSetup) throw new Error('Validez le type de pièce avant de scanner.')
       const data = await deliberaApi.validateScan(scanType.projet, scanCodes, scanType.version)
-      if (data.wasReturnedBefore) throw new Error('Cette pièce est déjà retournée. Rescan impossible.')
+      if (data.wasReturnedBefore) {
+        window.dispatchEvent(new CustomEvent('barcode-error', { detail: {
+          title: 'Pièce déjà scannée',
+          message: 'Cette pièce existe déjà : elle a déjà été retournée. Rescan impossible.',
+          barcode: scannedValue,
+          hint: 'Enregistrement bloqué. Vérifiez la pièce dans l’historique avant de continuer.',
+        } }))
+        return
+      }
       if (data.found) checkScanType(data)
       if (data.hasOpenRecord) {
         const recId = safeId(data.recordId)
@@ -1081,7 +1089,15 @@ export default function Delibera() {
       if (!scanType || showScanSetup) throw new Error('Validez le type de pièce avant de scanner.')
       const data = await deliberaApi.validateScan(scanType.projet, scanCodes, scanType.version)
       if (!data.found) throw new Error('Code-barres non référencé dans aucun projet')
-      if (data.wasReturnedBefore) throw new Error('Cette pièce est déjà enregistrée comme OK.')
+      if (data.wasReturnedBefore) {
+        window.dispatchEvent(new CustomEvent('barcode-error', { detail: {
+          title: 'Pièce déjà scannée',
+          message: 'Cette pièce existe déjà : elle a déjà été scannée et enregistrée OK.',
+          barcode: scannedBarcode,
+          hint: 'Enregistrement bloqué. Vérifiez la pièce dans l’historique avant de continuer.',
+        } }))
+        return
+      }
       checkScanType(data)
       if (data.hasOpenRecord) {
         const recId = safeId(data.recordId)
@@ -1273,7 +1289,7 @@ export default function Delibera() {
           continue
         }
         try {
-          await deliberaApi.createRecord({
+          await deliberaApi.createRecordSilent({
             barcode: record.barcode,
             scanCodes: record.scanCodes,
             projet: record.projet || null,
@@ -1289,7 +1305,7 @@ export default function Delibera() {
           })
           inserted++
         } catch (e) {
-          errors.push(`${record.barcode}: ${e.message || "erreur d'enregistrement"}`)
+          errors.push(`${record.barcode}: ${e.response?.data?.error || e.message || "erreur d'enregistrement"}`)
         }
       }
       loadRecords()

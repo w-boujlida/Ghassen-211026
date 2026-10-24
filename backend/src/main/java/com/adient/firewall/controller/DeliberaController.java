@@ -204,6 +204,7 @@ public class DeliberaController {
         var settings = new LinkedHashMap<>(qRepo.getReferenceScanSettings(project,
                 Objects.toString(info.get("PDEF"), ""), version));
         settings.put("pdef", info.get("PDEF"));
+        settings.put("wasReturnedBefore", repo.hasReturnedRecord(code));
         return ResponseEntity.ok(ApiResponse.ok(settings));
     }
 
@@ -369,6 +370,14 @@ public class DeliberaController {
             throw new IllegalArgumentException("Code-barres erroné : code vide.");
         if (statutReprise != null && !"RETURNED".equals(statutReprise) && !"NOT_RETURNED".equals(statutReprise))
             return ResponseEntity.badRequest().body(ApiResponse.error("Statut de reprise invalide"));
+
+        // Contrôle anti-doublon : une pièce ne doit avoir qu'un seul enregistrement.
+        var existingRecord = repo.findActiveRecordByBarcode(barcode);
+        if (existingRecord.isPresent())
+            throw new IllegalStateException("Pièce déjà enregistrée : cette pièce existe déjà (enregistrement n° "
+                    + existingRecord.get().get("ID") + " en cours de traitement). Vérifiez-la dans l'historique au lieu de la rescanner.");
+        if (repo.hasReturnedRecord(barcode))
+            throw new IllegalStateException("Pièce déjà enregistrée : cette pièce existe déjà et a été validée OK. Aucun nouvel enregistrement ne sera créé.");
 
         List<String> projects = projet == null || projet.isBlank() ? qRepo.getProjectNames() : List.of(projet);
         Map<String, Object> referenceInfo = (version == null ? qRepo.lookupScanBarcode(projects, barcode, false)
