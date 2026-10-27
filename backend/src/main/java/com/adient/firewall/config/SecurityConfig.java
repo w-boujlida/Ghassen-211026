@@ -1,6 +1,8 @@
 package com.adient.firewall.config;
 
 import com.adient.firewall.security.JwtAuthFilter;
+import com.adient.firewall.audit.BusinessActivityFilter;
+import com.adient.firewall.audit.BusinessActivityRecorder;
 import org.apache.catalina.connector.Connector;
 import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServerFactoryCustomizer;
@@ -31,7 +33,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, BusinessActivityRecorder activityRecorder) throws Exception {
         return http
                 .cors(c -> c.configurationSource(corsSource()))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -42,6 +44,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new BusinessActivityFilter(activityRecorder), JwtAuthFilter.class)
                 .build();
     }
 

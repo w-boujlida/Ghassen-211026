@@ -3,6 +3,7 @@ import { deliberaApi } from '../api/delibera.api.js'
 import { lookupApi } from '../api/lookup.api.js'
 import { projectsApi } from '../api/projects.api.js'
 import { parseExcelFile } from '../utils/helpers.js'
+import { reportClientExport } from '../utils/businessActivity.js'
 import Pagination from '../components/Pagination.jsx'
 import DeliberaScanSetup from '../components/DeliberaScanSetup.jsx'
 import DeliberaMultiScanner from '../components/DeliberaMultiScanner.jsx'
@@ -1466,6 +1467,7 @@ export default function Delibera() {
       utils.book_append_sheet(wb, wsMeta, 'Filtres actifs')
 
       writeFile(wb, `delibera_export_${todayStr()}.xlsx`)
+      reportClientExport('delibera')
       showToast(`Export réussi — ${exportRows.length} ligne(s)`)
     } catch (e) { showToast('Erreur export : ' + e.message, 'error') }
   }

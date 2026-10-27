@@ -2,6 +2,24 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { usersApi } from '../api/users.api.js'
 import { exportToExcel } from '../utils/helpers.js'
+import { useAuth } from '../contexts/AuthContext.jsx'
+import BusinessActivityHistory from './BusinessActivityHistory.jsx'
+
+export default function LoginHistory({ embedded = false }) {
+  const { isAdmin } = useAuth()
+  const { id } = useParams()
+  const [tab, setTab] = useState('connections')
+  useEffect(() => { setTab('connections') }, [id, embedded])
+  return <>
+    {isAdmin && <div role="tablist" aria-label="Type d'historique" style={{ display: 'flex', gap: 8, padding: '12px 28px' }}>
+      <button role="tab" aria-selected={tab === 'connections'} className="btn btn-secondary" onClick={() => setTab('connections')}>Connexions</button>
+      <button role="tab" aria-selected={tab === 'activity'} className="btn btn-secondary" onClick={() => setTab('activity')}>Activité métier</button>
+    </div>}
+    {isAdmin && tab === 'activity'
+      ? <BusinessActivityHistory key={embedded ? 'global' : id || 'global'} userId={embedded ? undefined : id} embedded={embedded} />
+      : <ConnectionHistory embedded={embedded} />}
+  </>
+}
 
 function formatDate(raw) {
   if (!raw) return '—'
@@ -38,7 +56,7 @@ function StatusPill({ status }) {
  * Route params:
  *   id — user id (per-user history), absent = global view
  */
-export default function LoginHistory({ embedded = false }) {
+function ConnectionHistory({ embedded = false }) {
   const { id }   = useParams()
   const navigate = useNavigate()
 
@@ -100,7 +118,7 @@ export default function LoginHistory({ embedded = false }) {
       exportToExcel(data.map(r => ({
         Matricule: r.matricule, Nom: r.fullName, Connexion: r.loginAt,
         IP: r.ipAddress, MAC: r.serverMac, Statut: r.status,
-      })), 'historique_connexions.xlsx')
+      })), 'historique_connexions.xlsx', 'Connexions', 'users')
     } catch (e) {
       setError(e.response?.data?.error || e.message)
     } finally {

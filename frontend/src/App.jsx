@@ -11,6 +11,7 @@ import Employees from './pages/Employees.jsx'
 import Projects from './pages/Projects.jsx'
 import Reports from './pages/Reports.jsx'
 import Users from './pages/Users.jsx'
+import LoginHistory from './pages/LoginHistory.jsx'
 import Echeances from './pages/Echeances.jsx'
 import Delibera from './pages/Delibera.jsx'
 import DeliberaForms from './pages/DeliberaForms.jsx'
@@ -109,6 +110,8 @@ function AppRoutes() {
       <Route path="/suivi-qualite/shift"    element={<SuiviQualiteRoute><SuiviQualiteShift /></SuiviQualiteRoute>} />
       <Route path="/defauts-couturiere"     element={<DefautCouturiereRoute><DefautCouturiere /></DefautCouturiereRoute>} />
       <Route path="/users"                  element={<UsersRoute><Users /></UsersRoute>} />
+      <Route path="/login-history/:id"      element={<UsersRoute><LoginHistory /></UsersRoute>} />
+      <Route path="/login-history"          element={<PermissionsRoute><LoginHistory /></PermissionsRoute>} />
       <Route path="/profile"               element={<PrivateRoute><Profile /></PrivateRoute>} />
       <Route path="*"                       element={<Navigate to="/home" replace />} />
     </Routes>

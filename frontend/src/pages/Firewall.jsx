@@ -824,7 +824,7 @@ const handleRecPolyLookup = async (idx, val) => {
       })))
       const periodLabel = activeDateFilter || 'all_time'
       const today = new Date().toISOString().slice(0, 10)
-      exportToExcel(flat, `firewall_${periodLabel}_${today}.xlsx`, 'Firewall')
+      exportToExcel(flat, `firewall_${periodLabel}_${today}.xlsx`, 'Firewall', 'firewall')
     } catch (err) { alert('Erreur export: ' + err.message) }
   }
 

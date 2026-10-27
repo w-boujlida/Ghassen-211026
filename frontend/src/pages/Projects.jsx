@@ -7,6 +7,7 @@ import Pagination from '../components/Pagination.jsx'
 import BulkActionBar from '../components/BulkActionBar.jsx'
 import { useBulkSelection } from '../hooks/useBulkSelection.js'
 import { parseExcelFile, exportToExcel } from '../utils/helpers.js'
+import { reportClientExport } from '../utils/businessActivity.js'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import Modal, { ModalBtn, ModalField } from '../components/Modal.jsx'
@@ -333,7 +334,7 @@ export default function Projects() {
     const filenamePrefix = isMessages ? 'messages_verification' : 'checkpoints'
     if (template) {
       exportToExcel([{ PROJECT_NAME: '', PDEF: '', [valueKey]: '' }],
-        `modele_ajout_${filenamePrefix}.xlsx`, 'Ajout')
+        `modele_ajout_${filenamePrefix}.xlsx`, 'Ajout', 'projects')
       return
     }
     const rows = (isMessages ? metadataMessages : metadataCheckpoints).map(row => ({
@@ -345,7 +346,7 @@ export default function Projects() {
       showToast('Aucune donnée à exporter.', 'error')
       return
     }
-    exportToExcel(rows, `${filenamePrefix}.xlsx`, isMessages ? 'Messages' : 'Checkpoints')
+    exportToExcel(rows, `${filenamePrefix}.xlsx`, isMessages ? 'Messages' : 'Checkpoints', 'projects')
   }
 
   const openRefs = (name, isNew = false) => {
@@ -498,6 +499,7 @@ export default function Projects() {
       XLSX.utils.book_append_sheet(wb, ws, refsProject)
       const today = new Date().toISOString().slice(0, 10)
       XLSX.writeFile(wb, `Refs_${refsProject}_${today}.xlsx`)
+      reportClientExport('projects')
       showToast('Export Excel généré avec succès')
     } catch (e) {
       showToast(`Erreur lors de l'export : ${apiErr(e)}`, 'error')
@@ -510,6 +512,7 @@ export default function Projects() {
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([REF_HEADERS]), 'References')
     XLSX.writeFile(wb, 'Modele_references.xlsx')
+    reportClientExport('projects')
   }
 
   // ── Ref CRUD ──
@@ -703,7 +706,7 @@ export default function Projects() {
     exportToExcel(postes.map(poste => ({
       CODE: String(poste.CODE || poste.code || ''),
       NOM: String(poste.NOM || poste.nom || ''),
-    })), 'postes.xlsx', 'Postes')
+    })), 'postes.xlsx', 'Postes', 'postes')
   }
 
   // ── Defect code CRUD ──
@@ -801,7 +804,7 @@ export default function Projects() {
       DEMERITE: Number(defect.demerite) || 0,
       DELAI_ECHEANCE_HEURES: defect.delaiEcheanceHeures ?? '',
     }))
-    exportToExcel(rows, 'codes_defauts.xlsx', 'Codes défauts')
+    exportToExcel(rows, 'codes_defauts.xlsx', 'Codes défauts', 'common')
   }
 
   const rf = (key) => ({ value: refForm[key] || '', onChange: e => setRefForm(f => ({ ...f, [key]: e.target.value })) })

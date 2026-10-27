@@ -5,6 +5,7 @@ import { postesApi }       from '../api/postes.api.js'
 import { useAuth }         from '../contexts/AuthContext.jsx'
 import Pagination          from '../components/Pagination.jsx'
 import * as XLSX           from 'xlsx'
+import { reportClientExport } from '../utils/businessActivity.js'
 
 // ─── Control points template ──────────────────────────────────────────────────
 
@@ -545,6 +546,7 @@ function exportAuditExcel(audit, points) {
   const ws = XLSX.utils.aoa_to_sheet(allRows)
   XLSX.utils.book_append_sheet(wb, ws, 'Audit Produit')
   XLSX.writeFile(wb, `Audit_Produit_${audit.PROJET || 'export'}_${audit.DATE_AUDIT || new Date().toISOString().slice(0, 10)}.xlsx`)
+  reportClientExport('audit-produit')
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
