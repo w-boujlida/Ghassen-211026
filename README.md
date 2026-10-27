@@ -180,3 +180,61 @@ Clicking outside a modal does not dismiss it or discard the current form.
 Use its explicit close/cancel button (or the header cross). Successful save
 actions retain their existing completion behavior. This applies to shared
 settings dialogs and the custom Firewall, CSL and Delibera overlays.
+
+## Historique de l’activité métier (administrateurs)
+
+Dans **Utilisateurs → Historique de connexion**, l’onglet **Activité métier**
+affiche les actions du compte sélectionné ; l’historique global propose le même
+onglet. Seul le rôle **ADMIN** peut consulter cette activité, y compris via
+l’API. Les droits existants de consultation des connexions restent inchangés.
+Filtres : matricule exact (vue globale), dates inclusives, module et résultat ;
+pagination de 50 lignes dans l’interface (API : 1 à 200, page 1 à 1 000 000).
+
+Le backend enregistre les requêtes métier POST/PUT/PATCH/DELETE des modules
+applicatifs reconnus : créations, modifications, suppressions, imports,
+scans Délibéra, validations, contrôles et retours NOK → OK. Sont également
+enregistrés les GET explicites `/firewall/scan`, `/csl/scan` et les routes
+d’export serveur (Firewall/CSL, Tri, rapports qualité et défauts couturière).
+Les pages, listes, recherches de codes, statistiques, lectures d’historique,
+connexions et renouvellements de jetons sont exclus. Les tentatives de
+connexion continuent d’utiliser leur historique existant.
+
+Les exports Excel générés localement (Firewall, CSL, Délibéra, audit produit,
+opérateurs/employés, utilisateurs/connexions, projets/références/modèles,
+postes et codes défauts) déclarent leur génération après l’appel à XLSX.
+Ils sont affichés **Déclaré navigateur**, jamais comme une preuve de
+téléchargement réussi. L’API n’accepte qu’un module autorisé et le format XLSX ;
+l’acteur vient toujours de l’authentification serveur, pas du navigateur.
+Une déclaration échouée affiche une alerte à l’utilisateur.
+
+Chaque ligne conserve le matricule et l’identifiant authentifiés, la date
+serveur, le module, l’action, la route **modèle**, les identifiants de cible
+autorisés, le statut HTTP et la durée. Ni contenu de formulaire, ni mot de
+passe, jeton, fichier, SQL ou ensemble de paramètres n’est enregistré.
+Les identifiants de cible proviennent uniquement des variables de route
+autorisées et des paramètres `projet`, `barcode`, `barCode` ; les créations
+dont l’identifiant est dans le corps ne prétendent pas connaître cette cible.
+Les résultats sont des résultats **HTTP** : un import répondant 200 peut avoir
+des lignes ignorées/en erreur, et plusieurs requêtes peuvent correspondre
+à une seule opération utilisateur.
+
+Au premier démarrage, une table additive `USER_BUSINESS_ACTIVITY` et ses
+index sont créés dans le schéma Oracle applicatif (SYSTEM sur l’installation
+actuelle). Aucun changement des tables métier ou de `LOGIN_HISTORY`, aucune
+reconstitution d’anciennes actions, aucune suppression de données. Les acteurs
+restent lisibles après suppression d’un compte (pas de clé étrangère).
+La création de table doit réussir avant que le service démarre.
+
+L’enregistrement intervient après le traitement HTTP, indépendamment de la
+transaction métier : si le stockage d’audit échoue après une écriture validée,
+la réponse métier n’est pas changée et une alerte serveur **ERROR
+BUSINESS_AUDIT_WRITE_FAILED** est émise (type d’erreur, sans SQL ni paramètres).
+Surveiller ces alertes : une indisponibilité Oracle peut donc laisser une
+lacune, sans fausse ligne de succès. Les lectures/déclarations d’export
+indisponibles répondent 503 avec un message explicite. Aucun mécanisme de
+rétention automatique n’est appliqué.
+
+Validation ciblée : `mvn "-Dtest=BusinessActivity*Test" test` dans l’image
+builder backend ; build frontend avec son Dockerfile. Le déploiement doit
+publier **ensemble** le backend et le frontend, après validation ; aucune
+modification de volume ou import de base n’est nécessaire.

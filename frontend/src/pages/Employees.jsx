@@ -398,7 +398,7 @@ export default function Employees() {
       if (filters.projet) parts.push(filters.projet)
       if (filters.supervisor) parts.push(filters.supervisor)
       const suffix = parts.length ? `_${parts.join('_')}` : ''
-      exportToExcel(rows, `Employes${suffix}.xlsx`, 'Employés')
+      exportToExcel(rows, `Employes${suffix}.xlsx`, 'Employés', 'employees')
     } catch (e) {
       alert('Erreur export : ' + e.message)
     } finally {
@@ -410,7 +410,7 @@ export default function Employees() {
     const rows = supervisors.map(s => ({
       'Nom superviseur': typeof s === 'string' ? s : s.name,
     }))
-    exportToExcel(rows, 'Superviseurs.xlsx', 'Superviseurs')
+    exportToExcel(rows, 'Superviseurs.xlsx', 'Superviseurs', 'operators')
   }
 
   const handleExportCouturieres = () => {
@@ -421,7 +421,7 @@ export default function Employees() {
       Équipe: c.equipe || '',
       Actif: c.actif === 1 ? 'Oui' : 'Non',
     }))
-    exportToExcel(rows, 'Couturieres.xlsx', 'Couturières')
+    exportToExcel(rows, 'Couturieres.xlsx', 'Couturières', 'operators')
   }
 
   const handleImportExcel = async (event, kind) => {

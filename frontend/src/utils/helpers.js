@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { reportClientExport } from './businessActivity.js'
 
 /** Build query string from a filters object, skipping blank values. */
 export function buildQuery(params) {
@@ -19,11 +20,12 @@ export function debounce(fn, ms = 300) {
 }
 
 /** Export a JS array of objects to Excel (.xlsx). */
-export function exportToExcel(data, filename = 'export.xlsx', sheetName = 'Sheet1') {
+export function exportToExcel(data, filename = 'export.xlsx', sheetName = 'Sheet1', auditModule) {
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
   XLSX.writeFile(wb, filename)
+  if (auditModule) reportClientExport(auditModule)
 }
 
 /** Parse an Excel/CSV file → array of row objects. */

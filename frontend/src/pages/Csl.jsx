@@ -675,7 +675,7 @@ export default function Csl() {
       })))
       const periodLabel = activeDateFilter || 'all_time'
       const today = new Date().toISOString().slice(0, 10)
-      exportToExcel(flat, `csl_${periodLabel}_${today}.xlsx`, 'CSL')
+      exportToExcel(flat, `csl_${periodLabel}_${today}.xlsx`, 'CSL', 'csl')
     } catch (err) { alert('Erreur export: ' + err.message) }
   }
 

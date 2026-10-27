@@ -329,7 +329,7 @@ export default function Users() {
       ROLE: String(user.role || 'operator'),
       ACTIF: (user.isActive ?? user.is_active ?? true) ? 'Oui' : 'Non',
       DERNIERE_CONNEXION: String(user.lastLogin || ''),
-    })), 'utilisateurs.xlsx', 'Utilisateurs')
+    })), 'utilisateurs.xlsx', 'Utilisateurs', 'users')
   }
 
   /* ── SVG icons ── */

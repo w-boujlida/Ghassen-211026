@@ -11,6 +11,7 @@ export const usersApi = {
   updateTimeAccess: (id, data)     => http.put(`/admin/users/${id}/time-access`, data).then(unwrap),
   loginHistory:     (id, params)   => http.get(`/admin/users/${id}/login-history`, { params }).then(unwrap),
   allLoginHistory:  (params)       => http.get('/admin/login-history', { params }).then(unwrap),
+  activityHistory:  (id, params)   => http.get(id ? `/admin/users/${id}/activity-history` : '/admin/activity-history', { params }).then(unwrap),
   selectLoginHistory: (id, params) => http.get(id ? `/admin/users/${id}/login-history/selection` : '/admin/login-history/selection', { params }).then(unwrap),
   getPermissions:   ()             => http.get('/admin/permissions').then(unwrap),
   savePermissions:  (data)         => http.put('/admin/permissions', data).then(unwrap),
