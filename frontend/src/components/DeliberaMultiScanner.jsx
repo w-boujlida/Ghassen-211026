@@ -48,6 +48,10 @@ export default function DeliberaMultiScanner({ project, version, mode, disabled,
         }
         effectiveRules = data.rules
         setRules(effectiveRules); setPdef(String(data.pdef ?? ''))
+      } else {
+        const codesToCheck = codes.map((value, codeIndex) => codeIndex === index ? code : value)
+        await deliberaApi.validateUniqueScanCode(project, code, codes[0], index + 1, codesToCheck)
+        if (current !== generation.current) return
       }
       const values = effectiveRules.map((_, i) => i === index ? code : index === 0 ? '' : codes[i] || '')
       const checked = effectiveRules.map((_, i) => i === index ? false : index === 0 ? false : confirmed[i])

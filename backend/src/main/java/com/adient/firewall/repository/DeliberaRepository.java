@@ -262,6 +262,16 @@ public class DeliberaRepository {
         return count != null && count > 0;
     }
 
+    public boolean scanCodeUsedByAnotherRecord(String code, String primaryBarcode) {
+        Integer count = db.queryForObject(
+            "SELECT COUNT(*) FROM SYSTEM.DELIBERA_RECORDS " +
+            "WHERE (UPPER(TRIM(BARCODE))=UPPER(TRIM(?)) OR UPPER(TRIM(SCAN_CODE_2))=UPPER(TRIM(?)) " +
+            "OR UPPER(TRIM(SCAN_CODE_3))=UPPER(TRIM(?))) " +
+            "AND UPPER(TRIM(BARCODE))<>UPPER(TRIM(?))",
+            Integer.class, code, code, code, primaryBarcode);
+        return count != null && count > 0;
+    }
+
     public void saveScanCodes(long id, List<String> codes) {
         db.update("UPDATE SYSTEM.DELIBERA_RECORDS SET SCAN_CODE_2=?,SCAN_CODE_3=? WHERE ID=?",
                 new org.springframework.jdbc.core.SqlParameterValue(java.sql.Types.VARCHAR, codes.size() > 1 ? codes.get(1) : null),

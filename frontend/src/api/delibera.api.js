@@ -32,6 +32,10 @@ export const deliberaApi = {
     checkedBarcodeLookup(code, value => http.get('/delibera/barcode', { params: { code: value, project } }).then(unwrap)),
   validateScan: (project, codes, version) =>
     checkedBarcodeLookup(codes[0], () => http.post('/delibera/scan-validate', { project, codes, version }).then(unwrap), codes),
+  validateUniqueScanCode: (project, code, primaryBarcode, position, scanCodes) =>
+    checkedBarcodeLookup(code, () => http.post('/delibera/scan-code-unique', {
+      project, code, primaryBarcode, position,
+    }).then(unwrap), scanCodes),
 
   // ── Records ────────────────────────────────────────────────────────────────
   getRecords: (params) =>

@@ -124,6 +124,17 @@ class DeliberaScanTypeTest {
         verify(quality, never()).lookupScanBarcode(anyList(), anyString(), anyBoolean());
     }
 
+        @Test
+        void duplicateSecondaryScanCodeIsRejected() throws Exception {
+                when(repo.scanCodeUsedByAnotherRecord("SECONDARY", "PRIMARY")).thenReturn(true);
+                MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new GlobalExceptionHandler()).build()
+                                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/delibera/scan-code-unique")
+                                                .contentType("application/json")
+                                                .content("{\"project\":\"P6\",\"code\":\"SECONDARY\",\"primaryBarcode\":\"PRIMARY\",\"position\":2}"))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("code 2. Ce code est déjà utilisé")));
+        }
+
     @Test
     void incompleteCodeCannotPassThroughAnExistingHistoricalRecord() throws Exception {
         when(repo.findActiveRecordByBarcode("123")).thenReturn(Optional.of(

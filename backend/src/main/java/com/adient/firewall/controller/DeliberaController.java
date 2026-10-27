@@ -222,6 +222,7 @@ public class DeliberaController {
                 throw new IllegalArgumentException("La version du code scanné ne correspond pas à la version sélectionnée.");
             validatePieceCodes(String.valueOf(recognized.get("projet")),
                     Objects.toString(recognized.get("pdef"), ""), actualVersion, body.codes());
+            validateUniqueScanCodes(body.codes(), body.project());
         }
         var active = repo.findActiveRecordByBarcode(body.codes().get(0));
         active.ifPresent(record -> {
@@ -233,6 +234,36 @@ public class DeliberaController {
             }
         });
         return result;
+    }
+
+    @PostMapping("/scan-code-unique")
+    public ResponseEntity<ApiResponse<Void>> validateScanCodeUnique(@RequestBody Map<String, Object> body) {
+        String project = Objects.toString(body.get("project"), "").trim();
+        String code = Objects.toString(body.get("code"), "").trim();
+        String primaryBarcode = Objects.toString(body.get("primaryBarcode"), "").trim();
+        int position = body.get("position") instanceof Number n ? n.intValue() : 0;
+        if (project.isBlank() || code.isBlank() || primaryBarcode.isBlank() || position < 2 || position > 3)
+            throw new IllegalArgumentException("Données de contrôle du code scanné invalides.");
+        if (repo.scanCodeUsedByAnotherRecord(code, primaryBarcode))
+            throw duplicateScanCode(project, position);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    private void validateUniqueScanCodes(List<String> codes, String project) {
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < codes.size(); i++) {
+            String code = Objects.toString(codes.get(i), "").trim();
+            if (code.isBlank()) continue;
+            if (!seen.add(code.toUpperCase(Locale.ROOT)))
+                throw duplicateScanCode(project, i + 1);
+            if (i > 0 && repo.scanCodeUsedByAnotherRecord(code, codes.get(0)))
+                throw duplicateScanCode(project, i + 1);
+        }
+    }
+
+    private IllegalArgumentException duplicateScanCode(String project, int position) {
+        return new IllegalArgumentException("Code-barres erroné : projet " + QualityRepository.safe(project)
+                + ", code " + position + ". Ce code est déjà utilisé. Chaque code de la pièce doit être unique.");
     }
 
     private void validatePieceCodes(String project, String pdef, String version, List<String> codes) {
@@ -388,6 +419,7 @@ public class DeliberaController {
         List<String> scanCodes = parseScanCodes(body.get("scanCodes"), barcode);
         validatePieceCodes(actualProject, Objects.toString(referenceInfo.get("PDEF"), ""),
                 Objects.toString(referenceInfo.get("VERSION"), ""), scanCodes);
+        validateUniqueScanCodes(scanCodes, actualProject);
         List<Long> posteIds = parsePosteIds(body, posteId);
         posteId = posteIds.isEmpty() ? null : posteIds.get(0);
         long recId = repo.insertRecord(barcode, actualProject, reference, version, ligne, posteId, couturiereId, currentUser(), checkpoint, statutReprise);
